@@ -170,7 +170,7 @@ def _get_anthropic_model(model: str, temperature: float) -> BaseChatModel:
         model=model,  # pyright: ignore[reportCallIssue]
         api_key=settings.anthropic_api_key,
         temperature=temperature,
-        max_tokens=4096,  # pyright: ignore[reportCallIssue]
+        max_tokens=8192,  # pyright: ignore[reportCallIssue]
     )
 
 
@@ -211,8 +211,13 @@ def _get_ollama_model(model: str, temperature: float) -> BaseChatModel:
     """Create an Ollama chat model (local LLM)."""
     from langchain_ollama import ChatOllama
 
+    timeout = settings.ollama_timeout
     return ChatOllama(
         model=model,
         base_url=settings.ollama_base_url,
         temperature=temperature,
+        num_predict=4096,
+        reasoning=False,  # disable thinking phase — required for structured output
+        client_kwargs={"timeout": timeout},
+        sync_client_kwargs={"timeout": timeout},
     )

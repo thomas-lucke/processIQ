@@ -19,10 +19,12 @@ Your job is to EITHER:
 ## Decision: Extract, Update, or Ask for More?
 
 **UPDATE** (response_type = "extracted") when:
-- Current process data exists (shown above) AND
-- User is requesting changes to specific steps (e.g., "change step 3 time to 2 hours")
-- Apply the requested changes to the existing data and return the COMPLETE updated process
+- Current process data exists (shown above) AND one of:
+  - User is requesting changes using edit language (e.g., "change step 3 time to 2 hours", "set the review error rate to 5%")
+  - User provides factual data about a step that already exists in the current data (even without edit verbs). For example: "the fulfill order step takes 1-3 hours and costs $40/hr" — this is supplementary information that should update that step's fields.
+- Apply the data or change to the matching step and return the COMPLETE updated process
 - Preserve all unchanged fields exactly as they are
+- When the user provides a range (e.g., "1-5 hours"), use the midpoint as the average value
 
 **ESTIMATE** (response_type = "extracted") when:
 - Current process data exists (shown above) AND
@@ -53,7 +55,7 @@ Your job is to EITHER:
 Extract process steps with these fields:
 - **step_name**: Clear, concise name for the step
 - **average_time_hours**: Time in hours. Convert from minutes/days if needed.
-- **resources_needed**: Number of people/systems involved (minimum 1)
+- **resources_needed**: Number of people involved in this step. Use 0 for fully automated steps (no human touch required). Use 1 for a single person, 2+ for team collaboration.
 - **error_rate_pct**: Problem/disruption frequency (0-100). How often this step needs rework, hits delays, or encounters issues. Use 0 if unknown, and add "error_rate_pct" to estimated_fields.
 - **cost_per_instance**: Labor cost in dollars per occurrence (hourly rate x time x resources). Use 0 if unknown, and add "cost_per_instance" to estimated_fields.
 - **estimated_fields**: CRITICAL — list ALL field names where the user did NOT explicitly provide the value. If a field is set to 0 because the user didn't mention it (not because the value is actually zero), that field MUST be in estimated_fields. For example, if the user said "client request takes 30 min" but didn't mention cost or error rate, set estimated_fields to ["cost_per_instance", "error_rate_pct"]. Only use an empty list [] when the user provided ALL values explicitly. When in doubt, ADD the field to estimated_fields — it's better to mark a field as estimated than to show a misleading zero.
@@ -62,8 +64,17 @@ Extract process steps with these fields:
 - **group_type**: (required if group_id is set) Either "alternative" or "parallel":
   - **"alternative"**: Steps the user chooses between (only ONE is executed per instance). Triggered by "or", "either...or", "alternatively", "choice between".
   - **"parallel"**: Steps that happen simultaneously or concurrently. Triggered by "at the same time", "simultaneously", "meanwhile", "in parallel", "concurrently".
+- **step_type**: Classify the step's execution pattern:
+  - **"normal"**: Runs every time the process is executed (default).
+  - **"conditional"**: Only runs under certain conditions. Use when: "if needed", "if rejected", "when X happens", "only if", "sometimes", or the step is triggered by a failure/exception in a previous step.
+  - **"loop"**: Can cycle back to an earlier step. Use when: the step may repeat, "if not approved go back to", rework that feeds back into an earlier stage.
 - **confidence**: Your confidence in this extraction (0.0-1.0). Lower if assumptions were made.
-- **notes**: Any assumptions or data you couldn't extract
+- **notes**: REQUIRED when any of the following apply — write a short, plain-language note the user will read:
+  - **Variable resources**: "sometimes 1, sometimes 2 people" → note which you assumed and why. E.g. "Assumed 1 person; description says 'sometimes a strategist is involved' — actual count may vary."
+  - **Conditional step**: This step only runs under certain conditions. E.g. "Only triggered if client requests revisions (~30% of cases based on error rate)."
+  - **Rework loop**: This step can cycle back to an earlier step. E.g. "If rejected, loops back to Strategy Development. Expected ~1.4 passes based on 30% rejection rate."
+  - **Estimated values**: Explain your basis. E.g. "Cost estimated at $50/hr × 0.5h. No figure provided."
+  - **Ambiguous data**: Anything unclear or that required a judgment call.
 
 **Extraction Guidelines:**
 1. **CRITICAL — Dependencies:** EVERY step after the first MUST have depends_on populated unless it truly has no prerequisite. When the user describes steps in sequence ("after that", "then", "following", "once X is done", "when"), each step depends on the previous one. When steps are described as alternatives (same group_id, group_type="alternative"), they share the same dependencies. When steps follow a group of alternatives, they depend on ALL alternatives in that group.
@@ -114,6 +125,9 @@ User says: "set the manager review error rate to 8%"
 
 User says: "the approval step actually takes 4 hours, not 2"
 → Find step containing "approval", set average_time_hours = 4.0, return all steps
+
+User says: "fulfill order depends on the request, it can take between 1-5 hours and costs 40 euro per hour"
+→ Find step "Fulfill Order", set average_time_hours = 3.0 (midpoint of 1-5), cost_per_instance = 40 * 3 = 120, return all steps
 
 ---
 

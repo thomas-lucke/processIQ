@@ -70,6 +70,15 @@ class Settings(BaseSettings):
         description="Enable LLM-generated explanations. Disable for testing or cost control.",
     )
     ollama_base_url: str = "http://localhost:11434"
+    ollama_timeout: int = Field(
+        default=120,
+        ge=10,
+        description=(
+            "Request timeout in seconds for Ollama LLM calls. "
+            "Increase this if your hardware is slow and requests time out. "
+            "On CPU-only machines, 300+ seconds may be needed for large models."
+        ),
+    )
 
     # Per-task LLM overrides (JSON format in env vars)
     # Example: LLM_TASK_EXTRACTION='{"model": "gpt-5-nano"}'

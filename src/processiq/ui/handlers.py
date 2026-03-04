@@ -491,9 +491,10 @@ def _handle_clarification_response(user_input: str) -> None:
 def _handle_continuing_input(user_input: str) -> None:
     """Handle user input in CONTINUING state (after results shown).
 
-    Detects:
-    - Re-analysis requests with constraint modifications
-    - General follow-up questions about results (sent to LLM)
+    Re-analyze triggers (explicit keywords) → re-run analysis with current data.
+    Everything else → route to extraction LLM with current process data as context.
+      - If the LLM sees a process change, it returns updated data → CONFIRMING state.
+      - If it sees a question, it returns needs_clarification with a reply → stays in CONTINUING.
     """
     from processiq.models import Constraints
     from processiq.models.constraints import Priority
@@ -568,85 +569,10 @@ def _handle_continuing_input(user_input: str) -> None:
         )
         _run_analysis()
     else:
-        # Follow-up question — send to LLM with analysis context
-        _handle_followup_question(user_input)
-
-
-def _handle_followup_question(user_input: str) -> None:
-    """Answer a follow-up question about analysis results using the LLM."""
-    from langchain_core.messages import HumanMessage, SystemMessage
-
-    from processiq.agent.nodes import (
-        _format_business_context_for_llm,
-        _format_constraints_for_llm,
-    )
-    from processiq.llm import extract_text_content, get_chat_model
-    from processiq.prompts import get_followup_prompt, get_system_prompt
-    from processiq.ui.state import get_analysis_insight
-
-    insight = get_analysis_insight()
-    if not insight:
-        add_message(
-            create_agent_message(
-                "No analysis results available. Run an analysis first, "
-                "then ask follow-up questions."
-            )
-        )
-        return
-
-    # Build recent chat history (last 10 messages, skip status/system messages)
-    history = []
-    for msg in get_messages()[-20:]:
-        if msg.type.value in ("text", "analysis"):
-            role = "User" if msg.role.value == "user" else "Advisor"
-            history.append({"role": role, "content": msg.content})
-    # Keep only the last 10 conversational messages
-    history = history[-10:]
-
-    # Format business context and constraints if available
-    profile = get_business_profile()
-    constraints = get_constraints()
-    business_context = _format_business_context_for_llm(profile) if profile else None
-    constraints_summary = (
-        _format_constraints_for_llm(constraints) if constraints else None
-    )
-
-    prompt = get_followup_prompt(
-        insight=insight,
-        user_question=user_input,
-        history=history,
-        business_context=business_context,
-        constraints_summary=constraints_summary,
-    )
-
-    try:
-        model = get_chat_model(task="clarification")
-        system_msg = get_system_prompt(profile=profile)
-        messages = [
-            SystemMessage(content=system_msg),
-            HumanMessage(content=prompt),
-        ]
-
-        response = model.invoke(messages)
-        answer = extract_text_content(response)
-
-        if answer:
-            add_message(create_agent_message(answer))
-        else:
-            logger.warning("LLM returned empty response for follow-up question")
-            add_message(
-                create_agent_message(
-                    "I wasn't able to generate a response. Could you rephrase your question?"
-                )
-            )
-
-    except Exception:
-        logger.exception("Failed to answer follow-up question")
-        add_message(
-            create_error_message(
-                "Something went wrong while processing your question. Please try again."
-            )
-        )
+        # Route to extraction LLM with current process data as context.
+        # The extraction prompt decides: process change → returns data (→ CONFIRMING),
+        # question/conversation → returns needs_clarification (→ chat reply, stays CONTINUING).
+        _process_text_input(user_input)
 
 
 def _run_analysis() -> None:

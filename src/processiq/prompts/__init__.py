@@ -221,32 +221,3 @@ def get_investigation_system_prompt(
         profile=profile,
         constraints=constraints,
     )
-
-
-def get_followup_prompt(
-    insight: Any,
-    user_question: str,
-    history: list[dict[str, str]] | None = None,
-    business_context: str | None = None,
-    constraints_summary: str | None = None,
-) -> str:
-    """Get prompt for answering follow-up questions about analysis results.
-
-    Args:
-        insight: The AnalysisInsight object from the completed analysis.
-        user_question: The user's follow-up question.
-        history: Recent chat history as list of {"role": ..., "content": ...} dicts.
-        business_context: Optional formatted business context.
-        constraints_summary: Optional summary of active constraints.
-
-    Returns:
-        Rendered prompt string.
-    """
-    return render_prompt(
-        "followup",
-        insight=insight,
-        user_question=user_question,
-        history=history or [],
-        business_context=business_context,
-        constraints_summary=constraints_summary,
-    )

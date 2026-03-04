@@ -245,22 +245,30 @@ flowchart TD
 
 ### Agent Graph
 
-The LangGraph agent uses a simplified 4-node graph:
-
 ```mermaid
 flowchart LR
-    A[check_context] -->|sufficient| B[analyze]
+    A[check_context] -->|sufficient| B[initial_analysis]
     A -->|insufficient| C[request_clarification]
     C -->|user responds| A
-    B --> D[finalize]
+    B -->|issues found| D[investigate]
+    B -->|no issues| F[finalize]
+    D -->|tool calls| E[tool_node]
+    E --> D
+    D -->|done| F[finalize]
 ```
 
 | Node | Role |
 |------|------|
 | `check_context` | Evaluates data completeness, decides if analysis can proceed |
 | `request_clarification` | Asks targeted questions based on data gaps |
-| `analyze` | Runs metrics calculation + LLM analysis via `analyze.j2` |
-| `finalize` | Packages `AnalysisInsight` into final response |
+| `initial_analysis` | Calculates process metrics + LLM analysis via `analyze.j2` → `AnalysisInsight` |
+| `investigate` | LLM with bound tools decides which issues to investigate and how |
+| `tool_node` | LangGraph `ToolNode` — executes tool calls, appends results to messages, loops back |
+| `finalize` | Incorporates tool findings, packages final `AnalysisInsight` |
+
+**Investigation tools** (`agent/tools.py`): `analyze_dependency_impact`, `validate_root_cause`, `check_constraint_feasibility`. All use `InjectedState` — the LLM never sees the state parameter; LangGraph injects it at call time.
+
+**Cycle control:** `AgentState.cycle_count` tracks LLM decision turns. Configurable via `AGENT_MAX_CYCLES` (default: 3) or an optional UI slider (`AGENT_LOOP_SLIDER_ENABLED`). The LLM also stops naturally when no further tool calls are needed.
 
 ### File Structure
 
@@ -288,13 +296,15 @@ processiq/
 │       ├── analysis/              # Pure algorithms (no LLM)
 │       │   ├── metrics.py         # ProcessMetrics, calculate_process_metrics()
 │       │   ├── roi.py             # ROI with pessimistic/likely/optimistic ranges
-│       │   └── confidence.py      # Data completeness scoring
+│       │   ├── confidence.py      # Data completeness scoring
+│       │   └── visualization.py   # GraphSchema, build_graph_schema(), build_process_figure()
 │       │
 │       ├── agent/                 # LangGraph agent
 │       │   ├── state.py           # AgentState (TypedDict)
-│       │   ├── nodes.py           # check_context, analyze, finalize nodes
+│       │   ├── nodes.py           # check_context, initial_analysis, investigate, finalize nodes
 │       │   ├── edges.py           # Conditional routing
 │       │   ├── graph.py           # Graph construction and compilation
+│       │   ├── tools.py           # Investigation tools with InjectedState
 │       │   ├── interface.py       # Clean API for UI (analyze, extract, continue)
 │       │   └── context.py         # Conversation context builder for LLM calls
 │       │
@@ -303,6 +313,7 @@ processiq/
 │       │   ├── system.j2          # Base system prompt with definitions
 │       │   ├── extraction.j2      # Process extraction + interview + edit
 │       │   ├── analyze.j2         # LLM-based process analysis
+│       │   ├── investigation_system.j2  # System prompt for investigation loop
 │       │   ├── clarification.j2   # Generate clarification questions
 │       │   ├── followup.j2        # Post-analysis follow-up conversation context
 │       │   └── improvement_suggestions.j2  # Post-extraction guidance
@@ -330,6 +341,7 @@ processiq/
 │               ├── chat.py            # Chat interface, message rendering
 │               ├── advanced_options.py # Sidebar: constraints, context, mode
 │               ├── results_display.py  # Summary-first analysis display
+│               ├── process_visualization.py  # Plotly flowchart (temporary — replaced by React Flow in Task 2.5)
 │               ├── export_section.py   # Download buttons
 │               ├── privacy_notice.py   # Two-tier privacy explanation
 │               ├── data_review.py      # Data confirmation cards
@@ -607,7 +619,7 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 
 ---
 
-## What's Implemented (Phase 1)
+## What's Implemented (Phase 1 + Phase 2 Tasks 1–2)
 
 ### Core Analysis Pipeline
 
@@ -617,9 +629,11 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 - LLM-powered extraction with Instructor (structured output, auto-retries)
 - Process metrics calculation (`analysis/metrics.py`)
 - LLM-based analysis via `analyze.j2` (pattern detection, waste vs value, root causes)
+- Agentic investigation loop: three tools (`analyze_dependency_impact`, `validate_root_cause`, `check_constraint_feasibility`) using LangGraph `ToolNode` + `InjectedState`; configurable cycle limit
 - ROI calculation with pessimistic/likely/optimistic ranges
 - Data completeness scoring
 - Export (CSV, text, markdown)
+- Process visualization: interactive flowchart with severity-colored nodes, dependency edges, and Before/After toggle
 
 ### Chat-First UI
 
@@ -630,7 +644,7 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 - Advanced options sidebar (constraints, business context with revenue range, analysis mode, LLM provider)
 - Business context fields: industry, company size, annual revenue, regulatory level, free-text notes
 - Privacy notice component (two-tier explanation)
-- Summary-first results display (issues linked to recommendations)
+- Summary-first results display: process flow visualization → issues → recommendations
 - Progressive disclosure on recommendations (3 layers: summary, plain explanation, concrete next steps)
 - Draft analysis preview after extraction
 - Targeted follow-up questions based on data gaps
@@ -638,6 +652,8 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 - Post-analysis follow-up conversation (LLM-driven with full analysis context)
 - Step grouping: alternative steps (either/or) and parallel steps (simultaneous) with computed step numbering
 - Recommendation feedback loop: thumbs up/down per recommendation with optional rejection reason; feedback injected into subsequent analyses so the LLM avoids rejected approaches
+- Investigation findings display: collapsible section showing tool call results from the agentic investigation loop
+- Agent cycle depth slider: optional UI control for investigation loop depth (enabled via `AGENT_LOOP_SLIDER_ENABLED`)
 
 ### LLM Flexibility
 
@@ -654,14 +670,14 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 ### Architecture
 
 ```
-BEFORE (algorithm-first):
-User Data -> Algorithm (find max time) -> LLM (format output)
-
-AFTER (LLM-first):
-User Data -> Algorithm (calculate facts) -> LLM (interpret, judge) -> Results
+User Data -> Algorithm (calculate facts) -> LLM initial analysis
+                                                    ↓ (if issues found)
+                                            LLM investigation loop (tool calls)
+                                                    ↓
+                                            Finalize with findings -> Results
 ```
 
-The agent/interface.py module provides a clean API between the UI and the LangGraph agent:
+The `agent/interface.py` module provides a clean API between the UI and the LangGraph agent:
 - `analyze_process()` - run full analysis on confirmed data
 - `extract_from_text()` - LLM extraction from text description
 - `extract_from_file()` - Docling + LLM extraction from files
@@ -772,35 +788,33 @@ Business context fields (industry, company size, annual revenue, regulatory leve
 
 ---
 
-## Phase 2 Roadmap (Future)
+## Phase 2 Roadmap (Active)
 
-### Full RAG System
-- **ChromaDB integration** for document embedding and retrieval
-- **Document library:** Users can maintain a collection of reference documents
-- **RAG retrieval during analysis:** Pull relevant context from past documents
-- **Source attribution:** Results cite which documents informed recommendations
+### Process Visualization
+- Interactive flowchart with bottleneck severity coloring
+- Before/after recommendation toggle
+- Renderer-agnostic `GraphSchema` DTO — usable from Streamlit now, React Flow later
 
-### Advanced Memory
+### Frontend Migration
+- FastAPI backend: Python agent logic exposed as HTTP endpoints
+- Next.js + React Flow frontend: professional SaaS-style UI with interactive process graph
+- Replaces Streamlit; Python backend unchanged
+
+### Persistent Memory + ChromaDB RAG
+- **Business profile persistence:** Industry, constraints, preferences stored in SQLite across sessions
 - **Episodic memory:** Log each analysis session with outcomes
-- **Learning from feedback:** Track accepted/rejected suggestions, extract patterns
-- **Procedural memory:** Self-improving prompts based on user feedback
-- **Cross-session learning:** "Users in your industry typically prefer X"
+- **ChromaDB RAG:** Semantic retrieval of past analyses as context for new ones
+- **Source attribution:** Results cite which past analysis informed a recommendation
 
-### Knowledge Enrichment (Phased)
+### UX Improvements
+- Concrete hours/year metrics ("Your team spends ~340 hours/year on this step")
+- Visible constraint reasoning ("What I ruled out and why")
+- Markdown proposal export (business-audience document for Notion/Confluence)
 
-| Phase | Feature | Description |
-|-------|---------|-------------|
-| 2A | Selective enrichment (opt-in) | "Compare to benchmarks" button, confidence-triggered search |
-| 2B | Domain knowledge base | Curated benchmark database, best practice library (local RAG) |
-| 3 | Premium tier | Always-on enrichment, real-time web search, licensed data sources |
-
-**Design Principle:** Great UX comes from *relevance*, not *comprehensiveness*. A thoughtful question about the user's specific situation beats 10 generic industry benchmarks.
-
-### UX Enhancements
-- **LLM response streaming** (`st.write_stream()`)
-- **Process visualization:** Interactive flowcharts
-- **Comparison mode:** Compare multiple process versions
-- **Team features:** Share analyses, collaborative editing
+### Phase 3
+- LLM response streaming
+- Comparison mode (two process versions side by side)
+- Opt-in benchmark comparison against industry data
 
 ### Sample Data Structure
 

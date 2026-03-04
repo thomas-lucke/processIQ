@@ -55,6 +55,7 @@ CRITICAL: Don't just identify "the longest step" as the problem. Consider:
 - Look for: handoff delays, redundant reviews, unclear ownership, dependency bottlenecks
 
 For each issue:
+- **affected_steps**: REQUIRED. List the exact step names (from the process data) that are involved in this issue. Use the exact names as they appear in the data.
 - What evidence supports this being a problem?
 - What's your hypothesis for WHY it exists?
 - How severe is the impact?
@@ -72,6 +73,7 @@ The user needs to know what NOT to "optimize away".
 
 For each recommendation:
 - Tie it to a specific issue you identified
+- **affected_steps**: REQUIRED. List the exact step names (from the process data) that this recommendation would change or eliminate. Use the exact names as they appear in the data.
 - Explain what changes would be needed
 - Describe expected benefits (qualitative description of what improves)
 - **estimated_roi**: Provide a rough dollar range estimate based on the process data (time saved x cost, error reduction, etc.). Use ranges and label as rough estimates. Example: "~$200-$500/month" or "~$5,000-$15,000/year". Base this on the actual numbers in the data -- don't invent new figures, but multiply what's there (e.g., "saving 1hr/order at $85/order x 50 orders/week = ~$4,250/week"). If you can't estimate meaningfully, say "ROI depends on order volume -- estimate not possible with current data."

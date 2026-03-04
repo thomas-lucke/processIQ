@@ -2,13 +2,52 @@
 
 All notable design decisions and changes to ProcessIQ are documented here.
 
-Format: `[YYYY-MM-DD] Category: Description`
-
-Categories: `DESIGN`, `ARCHITECTURE`, `SCOPE`, `TECH`, `DECISION`
+Categories: `DESIGN`, `ARCHITECTURE`, `SCOPE`, `TECH`, `DECISION`, `CODE`, `FIX`
 
 ---
 
-## 2026-02-27 (Phase 2 Task 1: agentic investigation loop)
+## 2026-03-04
+
+### ARCHITECTURE: Post-analysis follow-up routing replaced with extraction LLM
+
+Removed `_handle_followup_question`, `_is_process_update`, `get_followup_prompt`, and `followup.j2`. After analysis, all user messages now route to `_process_text_input`, which calls the extraction LLM with the current process data as context. The extraction prompt already distinguishes process changes from questions, eliminating the brittle keyword classifier and a redundant LLM call.
+
+### FIX: Ollama analysis hang and improved error handling
+
+- Added `reasoning=False` to `ChatOllama` to disable thinking mode on qwen3 and similar models — required for reliable structured output
+- Timeout configurable via `OLLAMA_TIMEOUT` in `.env` (default 120s); no longer retries on timeout
+- User-facing error message now explains the cause and suggests alternatives
+
+### FIX: Several smaller fixes
+
+- RecursionError crash when LLM produced a circular dependency (A → B → A) in `_calculate_longest_chain` — added cycle detection
+- Visualization node severity colors not applying — `_assign_severity` was exact-string only; switched to case-insensitive substring match
+- Anthropic structured output truncated mid-response for complex analyses — raised `max_tokens` from 4096 to 8192
+
+---
+
+## 2026-03-03 (Phase 2 Task 2: process visualization)
+
+### ARCHITECTURE: Two-layer visualization system (`analysis/visualization.py`)
+
+New module implementing a renderer-agnostic data layer on top of which a temporary Plotly renderer sits:
+
+- **Layer 1 (permanent):** `GraphSchema` Pydantic model with `GraphNode`, `GraphEdge`. `build_graph_schema()` computes a layered DAG layout (Sugiyama-style topological sort — not networkx) and assigns severity per node using precedence rules: high issue > medium issue > recommendation-affected > core value > normal. Before and after node sets share positions but differ in severity, supporting the Before/After toggle without re-layout.
+- **Layer 2 (temporary):** `build_process_figure()` converts `GraphSchema` to a Plotly figure with `updatemenus` Before/After toggle. This layer will be deleted when React Flow replaces Streamlit (Task 2.5). The data layer and `GraphSchema` contract stay unchanged.
+
+Layout algorithm: Kahn's topological sort → longest-path level assignment → y-centering within each level. Falls back to linear sequence on cycles or missing dependency data. ~40 lines, no new dependency.
+
+### CODE: New `ui/components/process_visualization.py`
+
+Thin Streamlit wrapper: calls `build_graph_schema()` then `build_process_figure()`, renders with `st.plotly_chart()`. Handles graceful degradation: < 2 steps → skip silently; no dependency data → linear sequence; no `AnalysisInsight` → all-gray nodes. Exception-safe — a rendering failure does not break the rest of the results display.
+
+### CODE: Process flowchart integrated into results display
+
+`results_display.py` now renders the process visualization between the summary and the main opportunities sections. Order: What I Found → Process Flow → Main Opportunities → Core Value Work → expandable details.
+
+---
+
+## 2026-02-27 (Phase 2 Task 1: agentic investigation loop + UX fixes)
 
 ### ARCHITECTURE: Replaced single-pass analysis node with genuine agentic loop
 
@@ -29,11 +68,23 @@ The analysis pipeline now supports iterative LLM-driven investigation via native
 
 Added `TASK_INVESTIGATION`, `agent_max_cycles` (default: 3), `agent_loop_slider_enabled` (default: False), and `llm_task_investigation: LLMTaskConfig` to `Settings`. Full per-task override support follows existing pattern.
 
-### CODE: UI additions
+### CODE: UI additions for investigation loop
 
 - `investigation_findings` rendered as collapsible "Investigation Details" section in results.
 - Investigation depth slider added to Advanced Options (gated behind `agent_loop_slider_enabled` env var).
 - `max_cycles_override` flows from UI slider → session state → `analyze_process()` → `create_initial_state()`.
+
+### FIX: Extraction prompt now recognizes supplementary step data as an update
+
+When existing process data was present and the user provided natural-language information about a named step (e.g., "fulfill order takes 1-5 hours and costs €40/hr"), the LLM was falling through to `needs_clarification` because the UPDATE rule only matched imperative edit-verb language. Added an explicit rule and example for the "supplementary info about an existing step" case.
+
+### CODE: Time display formatted as `Xh Ym` in summary metrics
+
+Added `format_hours(hours)` to `ui/styles.py`. Applied to "Total Time" metric in the chat table and data review components. The editable data_editor column retains numeric input with `"%.2f h"` format.
+
+### DESIGN: `resources_needed` reframed as people-only count
+
+Changed field description from "number of people/systems involved" to "number of people involved (0 = fully automated)". Rationale: people and systems aren't comparable units — the old label invited confusion. Systems are implicitly captured by cost. UI column label changed from "Resources" to "People" across chat table and data review. Internal field name and CSV schema unchanged for backwards compatibility.
 
 ---
 

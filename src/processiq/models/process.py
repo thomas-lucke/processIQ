@@ -13,7 +13,9 @@ class ProcessStep(BaseModel):
         ..., ge=0, description="Average time to complete in hours"
     )
     resources_needed: int = Field(
-        ..., ge=1, description="Number of people/systems involved"
+        ...,
+        ge=0,
+        description="Number of people involved. Use 0 for fully automated steps with no human touch.",
     )
     error_rate_pct: float = Field(
         default=0.0,
@@ -40,6 +42,15 @@ class ProcessStep(BaseModel):
         default=None,
         description="'alternative' = either/or (e.g., phone OR email), "
         "'parallel' = simultaneous (e.g., invoice paid AND added to tax system).",
+    )
+    step_type: Literal["normal", "conditional", "loop"] = Field(
+        default="normal",
+        description="'normal' = runs every time, 'conditional' = only runs under certain conditions, "
+        "'loop' = can cycle back to an earlier step.",
+    )
+    notes: str = Field(
+        default="",
+        description="Assumptions, conditional triggers, or ambiguities flagged during extraction.",
     )
 
     @field_validator("depends_on", mode="before")
@@ -151,6 +162,8 @@ class ProcessData(BaseModel):
                     estimated_fields=estimated,
                     group_id=existing.group_id or incoming.group_id,
                     group_type=existing.group_type or incoming.group_type,
+                    step_type=existing.step_type,
+                    notes=existing.notes or incoming.notes,
                 )
             )
 

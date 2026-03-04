@@ -82,7 +82,8 @@ ProcessIQ requires agentic behavior because it must:
 2. Decide when to ask clarifying questions instead of guessing
 3. Interpret patterns beyond deterministic metrics (waste vs. core value)
 4. Resolve constraint conflicts (cannot hire + hire 2 people = contradiction)
-5. Branch based on confidence scores
+5. Decide which issues warrant deeper investigation — and how to frame each investigation
+6. Stop investigating when enough evidence has been gathered
 
 ### Agent Type: Utility-Based Agent
 
@@ -145,22 +146,30 @@ flowchart TD
     L --> M[Export Options]
 ```
 
-### LangGraph Agent (4 Nodes)
+### LangGraph Agent
 
 ```mermaid
 flowchart LR
-    A[check_context] -->|sufficient| B[analyze]
+    A[check_context] -->|sufficient| B[initial_analysis]
     A -->|insufficient| C[request_clarification]
     C -->|user responds| A
-    B --> D[finalize]
+    B -->|issues found| D[investigate]
+    B -->|no issues| F[finalize]
+    D -->|tool calls| E[tool_node]
+    E --> D
+    D -->|done| F[finalize]
 ```
 
 | Node | Responsibility |
 |------|----------------|
 | `check_context` | Evaluate data completeness, decide whether to proceed or ask |
 | `request_clarification` | Ask targeted follow-up questions based on data gaps |
-| `analyze` | Calculate process metrics + LLM pattern analysis |
-| `finalize` | Package structured `AnalysisInsight` into final response |
+| `initial_analysis` | Calculate process metrics + LLM pattern analysis → `AnalysisInsight` |
+| `investigate` | LLM with bound tools decides which aspects to investigate deeper |
+| `tool_node` | Executes tool calls, appends results to message history, loops back |
+| `finalize` | Incorporates investigation findings, packages final `AnalysisInsight` |
+
+The investigation loop uses LangGraph's native `ToolNode` pattern with `InjectedState`. The LLM uses native function calling — it decides which tool to call and crafts specific arguments, rather than selecting from a fixed enum. The loop stops when the LLM makes no further tool calls or the cycle limit is reached.
 
 ---
 
@@ -226,13 +235,16 @@ New AnalysisInsight with adjusted recommendations
 ### Analysis Engine
 - Process metrics: cycle time, bottleneck identification, dependency graph
 - Waste vs. core value differentiation (LLM judgment, not just "longest = worst")
+- Agentic investigation loop: after initial analysis, the LLM uses tool calls to examine dependency impact, validate root cause hypotheses, and check constraint feasibility before finalizing recommendations
 - Root cause analysis with explicit reasoning
 - ROI ranges: pessimistic / likely / optimistic with stated assumptions
 - Confidence scoring based on data completeness
 
 ### Results Display
-- Summary-first layout: key insight → main opportunities → core value work
+- Summary-first layout: key insight → process flow visualization → main opportunities → core value work
+- Interactive process flowchart: nodes colored by severity (bottleneck = red, at-risk = amber, core value = green), sized by share of total time, with dependency edges; Before/After toggle shows impact of top recommendation
 - Issues linked directly to recommendations
+- Investigation findings: collapsible section showing what the agent examined during the tool-calling loop
 - Progressive disclosure: summary → plain explanation → concrete next steps
 - Estimated values marked with `*` to distinguish from user-provided data
 - Per-recommendation feedback (helpful / not useful + optional rejection reason); feedback is injected into subsequent analyses so the LLM avoids repeating rejected approaches
@@ -270,9 +282,10 @@ processiq/
 │   │
 │   ├── agent/                 # LangGraph agent
 │   │   ├── state.py           # AgentState (TypedDict)
-│   │   ├── nodes.py           # 4 node functions
+│   │   ├── nodes.py           # Node functions (check_context, initial_analysis, investigate, finalize)
 │   │   ├── edges.py           # Conditional routing
 │   │   ├── graph.py           # Graph construction
+│   │   ├── tools.py           # Investigation tools (InjectedState, native function calling)
 │   │   ├── interface.py       # Clean API for UI layer
 │   │   └── context.py         # Conversation context builder
 │   │
@@ -301,6 +314,7 @@ processiq/
 │   │   ├── system.j2
 │   │   ├── extraction.j2
 │   │   ├── analyze.j2
+│   │   ├── investigation_system.j2  # System prompt for investigation loop
 │   │   ├── clarification.j2
 │   │   ├── followup.j2
 │   │   └── improvement_suggestions.j2
@@ -379,15 +393,17 @@ uv run mypy src/
 
 See [ROADMAP.md](ROADMAP.md) for the full plan with rationale and sequencing.
 
-**Phase 2 priorities:**
-1. Cross-session feedback persistence — recommendation feedback currently resets on each session
-2. Persistent business profile — industry, size, constraints re-entered every session
-3. ChromaDB RAG — semantic retrieval of past analyses as context
+**Phase 2 (active):**
+- Process visualization — interactive flowchart with severity-colored nodes and Before/After toggle (complete)
+- Frontend migration — FastAPI backend + Next.js/React Flow frontend
+- Persistent memory — cross-session business profile, ChromaDB RAG
+- UX improvements — concrete hours/year metrics, visible constraint reasoning
+- Testing and CI/CD
 
 **Phase 3:**
 - LLM response streaming
-- Process flowchart visualization
-- Opt-in benchmark comparison
+- Comparison mode (two process versions side by side)
+- Opt-in benchmark comparison against industry data
 
 ---
 

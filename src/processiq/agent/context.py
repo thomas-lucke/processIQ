@@ -52,10 +52,10 @@ def serialize_process_data(process_data: ProcessData) -> str:
 
     # Table header
     lines.append(
-        "| # | Step | Time (hrs) | Cost ($) | Error % | Resources | Depends On | Group |"
+        "| # | Step | Time (hrs) | Cost ($) | Error % | People | Depends On | Group |"
     )
     lines.append(
-        "|---|------|------------|----------|---------|-----------|------------|-------|"
+        "|---|------|------------|----------|---------|--------|------------|-------|"
     )
 
     # Table rows (limited to MAX_TABLE_ROWS)

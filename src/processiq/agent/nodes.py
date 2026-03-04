@@ -155,22 +155,28 @@ def initial_analysis_node(state: AgentState) -> dict[str, Any]:
     # Call LLM for analysis
     analysis_mode = state.get("analysis_mode")
     llm_provider = state.get("llm_provider")
-    insight = _run_llm_analysis(
-        metrics_text=metrics_text,
-        business_context=business_context,
-        constraints_summary=constraints_summary,
-        profile=profile,
-        analysis_mode=analysis_mode,
-        llm_provider=llm_provider,
-        feedback_history=feedback_text,
-    )
+    timed_out = False
+    try:
+        insight = _run_llm_analysis(
+            metrics_text=metrics_text,
+            business_context=business_context,
+            constraints_summary=constraints_summary,
+            profile=profile,
+            analysis_mode=analysis_mode,
+            llm_provider=llm_provider,
+            feedback_history=feedback_text,
+        )
+    except TimeoutError:
+        insight = None
+        timed_out = True
 
     if insight is None:
         logger.warning("LLM analysis failed, no insight produced")
+        error_msg = "timeout" if timed_out else "LLM analysis failed. Please try again."
         return {
             "analysis_insight": None,
             "process_metrics": metrics,
-            "error": "LLM analysis failed. Please try again.",
+            "error": error_msg,
             "reasoning_trace": [
                 *state.get("reasoning_trace", []),
                 "LLM analysis failed",
@@ -468,12 +474,20 @@ def _run_llm_analysis(
                     result if isinstance(result, AnalysisInsight) else None
                 )
             except Exception as e:
+                err_str = str(e).lower()
+                is_timeout = (
+                    "timed out" in err_str
+                    or "timeout" in err_str
+                    or "read timeout" in err_str
+                )
                 logger.warning(
                     "Structured output failed on attempt %d: %s", attempt + 1, e
                 )
-                if attempt == 0:
-                    continue
-                return None
+                if is_timeout:
+                    raise TimeoutError("LLM request timed out") from e
+                if attempt >= 1:
+                    return None
+                continue
 
             if insight is None:
                 logger.warning("LLM returned None on attempt %d", attempt + 1)

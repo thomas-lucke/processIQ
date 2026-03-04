@@ -382,6 +382,7 @@ def analyze_process(
         reasoning_trace = result.get("reasoning_trace", [])
         needs_clarification = result.get("needs_clarification", False)
         clarification_questions = result.get("clarification_questions", [])
+        state_error = result.get("error", "")
 
         # Handle clarification requests
         if needs_clarification and clarification_questions:
@@ -417,9 +418,21 @@ def analyze_process(
 
         # Analysis completed but no results
         logger.warning("Analysis completed but produced no results")
+        if state_error == "timeout":
+            message = (
+                "The local model (Ollama) did not respond within the time limit. "
+                "This is a performance limitation of running large models on CPU — "
+                "the analysis schema is too complex for qwen3:8b to complete in time. "
+                "Try switching to OpenAI or Anthropic in the sidebar, or pull a smaller "
+                "Ollama model such as llama3.2:3b."
+            )
+        else:
+            message = (
+                "Analysis completed but could not generate recommendations. "
+                "Please try again or switch to a different LLM provider."
+            )
         return AgentResponse(
-            message="Analysis completed but could not generate recommendations. "
-            "This may indicate insufficient data.",
+            message=message,
             process_data=process,
             confidence=confidence,
             thread_id=thread_id,

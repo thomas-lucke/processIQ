@@ -46,3 +46,8 @@ docs/private/
 
 # ChromaDB local storage
 .chroma/
+
+# SQLite database (runtime data, not for version control)
+data/*.db
+data/*.db-shm
+data/*.db-wal

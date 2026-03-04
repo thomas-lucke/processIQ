@@ -464,16 +464,22 @@ def _calculate_longest_chain(process: ProcessData) -> int:
             if dep in adj:
                 adj[dep].append(step.step_name)
 
-    # Find longest path using DFS
+    # Find longest path using DFS with cycle detection
     memo: dict[str, int] = {}
+    visiting: set[str] = set()
 
     def dfs(node: str) -> int:
         if node in memo:
             return memo[node]
+        if node in visiting:
+            # Back-edge: cycle detected, treat as length 0 to break the loop
+            return 0
 
+        visiting.add(node)
         max_child = 0
         for child in adj.get(node, []):
             max_child = max(max_child, dfs(child))
+        visiting.discard(node)
 
         memo[node] = 1 + max_child
         return memo[node]

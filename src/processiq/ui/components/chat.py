@@ -18,6 +18,7 @@ from processiq.ui.state import set_process_data
 from processiq.ui.styles import (
     COLORS,
     confidence_badge,
+    format_hours,
     get_severity_color,
 )
 
@@ -166,20 +167,29 @@ def create_clarification_message(
 
 
 def _compute_step_numbers(steps: list[ProcessStep]) -> list[str]:
-    """Compute display step numbers with group labels.
+    """Compute display step numbers with group and type labels.
 
-    Sequential steps: "1", "2", "3"
+    Sequential steps:              "1", "2", "3"
     Alternative group (either/or): "1a (OR)", "1b (OR)"
     Parallel group (simultaneous): "5a (AND)", "5b (AND)"
+    Conditional step:              "6 (if)"
+    Loop step:                     "7 (↩)"
+    Combined:                      "4a (OR, if)"
     """
     numbers: list[str] = []
     base_num = 1
-    # group_id -> (base_number, next_letter_index)
     seen_groups: dict[str, tuple[int, int]] = {}
 
     for step in steps:
         gid = getattr(step, "group_id", None)
         gtype = getattr(step, "group_type", None)
+        stype = getattr(step, "step_type", "normal")
+
+        type_tag = ""
+        if stype == "conditional":
+            type_tag = "if"
+        elif stype == "loop":
+            type_tag = "↩"
 
         if gid:
             if gid in seen_groups:
@@ -192,10 +202,12 @@ def _compute_step_numbers(steps: list[ProcessStep]) -> list[str]:
                 seen_groups[gid] = (grp_base, 1)
                 base_num += 1
 
-            label = "(OR)" if gtype == "alternative" else "(AND)"
-            numbers.append(f"{grp_base}{letter} {label}")
+            group_label = "OR" if gtype == "alternative" else "AND"
+            tags = ", ".join(filter(None, [group_label, type_tag]))
+            numbers.append(f"{grp_base}{letter} ({tags})")
         else:
-            numbers.append(str(base_num))
+            label = f"{base_num} ({type_tag})" if type_tag else str(base_num)
+            numbers.append(label)
             base_num += 1
 
     return numbers
@@ -295,10 +307,12 @@ def _render_data_card(message: ChatMessage) -> None:
     # Build table data with numeric values and step numbering
     rows = []
     has_estimates = False
+    step_notes: list[tuple[str, str, str]] = []  # (step_num, step_name, note)
     step_numbers = _compute_step_numbers(process_data.steps)
 
     for idx, step in enumerate(process_data.steps):
         estimated = set(getattr(step, "estimated_fields", []))
+        notes = getattr(step, "notes", "") or ""
 
         # Show None (blank cell) for fields that are zero AND marked as estimated
         # This makes it visually obvious what data is missing
@@ -332,16 +346,22 @@ def _render_data_card(message: ChatMessage) -> None:
         if step_has_estimates:
             has_estimates = True
 
+        # Build step name label — append markers for estimated values and notes
+        step_label = step.step_name
+        if step_has_estimates:
+            step_label += " *"
+        if notes.strip():
+            step_label += " ⓘ"
+            step_notes.append((step_numbers[idx], step.step_name, notes.strip()))
+
         rows.append(
             {
                 "Step #": step_numbers[idx],
-                "Step Name": f"{step.step_name} *"
-                if step_has_estimates
-                else step.step_name,
+                "Step Name": step_label,
                 "Time (hrs)": time_val,
                 "Cost ($)": cost_val,
                 "Problem Freq.": freq_val,
-                "Resources": step.resources_needed or 0,
+                "People": step.resources_needed,
                 "Depends On": ", ".join(step.depends_on) if step.depends_on else "",
             }
         )
@@ -358,7 +378,7 @@ def _render_data_card(message: ChatMessage) -> None:
         column_config={
             "Step #": st.column_config.TextColumn(
                 "Step #",
-                help="Step number. (OR) = alternative paths, (AND) = simultaneous steps",
+                help="Step number. (OR) = alternative paths, (AND) = simultaneous, (if) = conditional, (↩) = rework loop",
                 width="small",
                 disabled=True,
             ),
@@ -369,9 +389,9 @@ def _render_data_card(message: ChatMessage) -> None:
             ),
             "Time (hrs)": st.column_config.NumberColumn(
                 "Time (hrs)",
-                help="Average time per execution in hours",
+                help="Average time per execution in hours. Enter a decimal (e.g. 1.5 = 1h 30m)",
                 min_value=0.0,
-                format="%.2f",
+                format="%.2f h",
             ),
             "Cost ($)": st.column_config.NumberColumn(
                 "Cost ($)",
@@ -386,9 +406,9 @@ def _render_data_card(message: ChatMessage) -> None:
                 max_value=100.0,
                 format="%.1f%%",
             ),
-            "Resources": st.column_config.NumberColumn(
-                "Resources",
-                help="Number of people or systems involved",
+            "People": st.column_config.NumberColumn(
+                "People",
+                help="Number of people involved. 0 = fully automated, no human touch.",
                 min_value=0,
                 step=1,
             ),
@@ -432,11 +452,22 @@ def _render_data_card(message: ChatMessage) -> None:
             unsafe_allow_html=True,
         )
 
+    # Show AI notes for steps with assumptions, conditionals, or loops
+    if step_notes:
+        with st.expander(f"ⓘ AI notes on {len(step_notes)} step(s)", expanded=False):
+            st.caption(
+                "Assumptions, conditional logic, or ambiguities flagged by the AI during extraction."
+            )
+            for step_num, step_name, note in step_notes:
+                st.markdown(f"**{step_num} — {step_name}**")
+                st.markdown(f"{note}")
+
     # Show totals (use message.data which may have been updated by edits)
     current_data: ProcessData = message.data
     col1, col2 = st.columns(2)
     with col1:
-        st.metric("Total Time", f"{current_data.total_time_hours:.1f} hours")
+        total_fmt = format_hours(current_data.total_time_hours) or "0h"
+        st.metric("Total Time", total_fmt)
     with col2:
         st.metric("Total Cost", f"${current_data.total_cost:.2f}")
 
@@ -485,8 +516,8 @@ def _apply_table_edits(
             if not step_name:
                 continue
 
-            # Strip estimate marker appended for display
-            clean_name = step_name.removesuffix(" *")
+            # Strip display markers appended for readability (added in order: " *" then " ⓘ")
+            clean_name = step_name.removesuffix(" ⓘ").removesuffix(" *")
 
             depends_on_str = str(row.get("Depends On", "") or "")
             depends_on = [s.strip() for s in depends_on_str.split(",") if s.strip()]
@@ -499,7 +530,7 @@ def _apply_table_edits(
             time_val = row.get("Time (hrs)", 0)
             cost_val = row.get("Cost ($)", 0)
             error_val = row.get("Problem Freq.", 0)
-            resources_val = row.get("Resources", 0)
+            resources_val = row.get("People", 0)
 
             new_time = 0.0 if pd.isna(time_val) else float(time_val)
             new_cost = 0.0 if pd.isna(cost_val) else float(cost_val)

@@ -41,6 +41,31 @@ SEVERITY_COLORS = {
 }
 
 
+def format_hours(hours: float | None) -> str | None:
+    """Format a fractional-hours value as a human-readable string.
+
+    Returns None for None/zero inputs (used in tables where None renders as blank).
+
+    Examples:
+        0.5   -> "30m"
+        1.0   -> "1h"
+        1.33  -> "1h 20m"
+        2.0   -> "2h"
+        0.083 -> "5m"
+    """
+    if hours is None or hours == 0:
+        return None
+    total_minutes = round(hours * 60)
+    if total_minutes <= 0:
+        return None
+    h, m = divmod(total_minutes, 60)
+    if h == 0:
+        return f"{m}m"
+    if m == 0:
+        return f"{h}h"
+    return f"{h}h {m}m"
+
+
 def get_confidence_color(confidence: float) -> str:
     """Get color for a confidence score."""
     if confidence >= 0.8:

@@ -20,7 +20,7 @@ from processiq.ui.state import (
     set_data_confirmed,
     set_data_gaps,
 )
-from processiq.ui.styles import get_confidence_color
+from processiq.ui.styles import format_hours, get_confidence_color
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,7 @@ def _render_process_summary(process_data: ProcessData) -> None:
         st.metric("Steps", len(process_data.steps))
 
     with col3:
-        st.metric("Total Time", f"{process_data.total_time_hours:.1f}h")
+        st.metric("Total Time", format_hours(process_data.total_time_hours) or "0h")
 
     with col4:
         st.metric("Total Cost", f"${process_data.total_cost:,.0f}")
@@ -106,7 +106,7 @@ def _render_steps_table(process_data: ProcessData) -> None:
         row = {
             "Step": step.step_name,
             "Time (h)": step.average_time_hours,
-            "Resources": step.resources_needed,
+            "People": step.resources_needed,
             "Problem Freq. (%)": step.error_rate_pct,
             "Cost ($)": step.cost_per_instance,
             "Depends On": ", ".join(step.depends_on) if step.depends_on else "-",

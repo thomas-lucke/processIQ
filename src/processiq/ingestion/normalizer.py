@@ -40,7 +40,9 @@ class ExtractedStep(BaseModel):
     step_name: str = Field(..., description="Name of the process step")
     average_time_hours: float = Field(..., ge=0, description="Average time in hours")
     resources_needed: int = Field(
-        ..., ge=1, description="Number of people/systems involved"
+        ...,
+        ge=0,
+        description="Number of people involved. Use 0 for fully automated steps with no human touch.",
     )
     error_rate_pct: float = Field(
         default=0.0, ge=0, le=100, description="Error rate percentage"
@@ -74,6 +76,11 @@ class ExtractedStep(BaseModel):
     )
     confidence: float = Field(
         default=1.0, ge=0, le=1, description="LLM's confidence in this extraction (0-1)"
+    )
+    step_type: Literal["normal", "conditional", "loop"] = Field(
+        default="normal",
+        description="'normal' = runs every time, 'conditional' = only runs under certain conditions "
+        "(e.g. only if client requests revision), 'loop' = can cycle back to an earlier step.",
     )
     notes: str = Field(default="", description="Any caveats or assumptions made")
 
@@ -305,6 +312,8 @@ def _extraction_result_to_process_data(result: ExtractionResult) -> ProcessData:
             depends_on=step.depends_on,
             group_id=step.group_id,
             group_type=step.group_type,
+            step_type=step.step_type,
+            notes=step.notes,
         )
         for step in result.steps
     ]

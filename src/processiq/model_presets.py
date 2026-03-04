@@ -48,11 +48,24 @@ PROVIDER_MODEL_PRESETS: dict[str, dict[str, dict[str, str] | str]] = {
         },
     },
     "ollama": {
-        # Ollama uses a single local model for all tasks and modes.
-        # Change this to match whichever model you have pulled locally.
-        "cost_optimized": "qwen3:8b",
-        "balanced": "qwen3:8b",
-        "deep_analysis": "qwen3:8b",
+        "cost_optimized": {
+            "extraction": "qwen3:8b",
+            "clarification": "qwen3:8b",
+            "explanation": "qwen3:8b",
+            "analysis": "llama3.2:3",
+        },
+        "balanced": {
+            "extraction": "qwen3:8b",
+            "clarification": "qwen3:8b",
+            "explanation": "qwen3:8b",
+            "analysis": "llama3.2:3",
+        },
+        "deep_analysis": {
+            "extraction": "qwen3:8b",
+            "clarification": "qwen3:8b",
+            "explanation": "qwen3:8b",
+            "analysis": "llama3.2:3",
+        },
     },
 }
 

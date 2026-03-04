@@ -16,8 +16,11 @@ import streamlit as st
 
 from processiq.models import AnalysisInsight
 from processiq.models.insight import Issue, NotAProblem, Recommendation
+from processiq.models.process import ProcessData
+from processiq.ui.components.process_visualization import render_process_visualization
 from processiq.ui.state import (
     get_analysis_insight,
+    get_process_data,
     get_reasoning_trace,
     get_recommendation_feedback,
     set_recommendation_feedback,
@@ -30,9 +33,10 @@ logger = logging.getLogger(__name__)
 def render_results() -> None:
     """Render the analysis results section."""
     insight = get_analysis_insight()
+    process_data = get_process_data()
 
     if insight:
-        _render_insight_results(insight)
+        _render_insight_results(insight, process_data)
     else:
         st.info("No analysis results available. Run the analysis first.")
 
@@ -42,10 +46,17 @@ def render_results() -> None:
 # =============================================================================
 
 
-def _render_insight_results(insight: AnalysisInsight) -> None:
+def _render_insight_results(
+    insight: AnalysisInsight, process_data: ProcessData | None = None
+) -> None:
     """Render new LLM-based analysis insight."""
     # What I Found - lead with summary
     _render_insight_summary(insight)
+
+    # Process visualization (between summary and opportunities)
+    if process_data is not None:
+        st.markdown("### Process Flow")
+        render_process_visualization(process_data, insight)
 
     # Main opportunities (issues + recommendations together)
     _render_opportunities(insight)

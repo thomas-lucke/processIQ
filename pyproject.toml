@@ -29,10 +29,13 @@ dependencies = [
     "openpyxl>=3.1.5",
     # UI
     "streamlit>=1.53.1",
-    "plotly>=6.5.2",
     # Observability
     "langsmith>=0.6.6",
-    # Phase 2 (uncomment when needed):
+    # Phase 2
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "python-multipart>=0.0.9",
+    "slowapi>=0.1.9",
     # "chromadb>=1.4.1",
     "docling>=2.71.0",
 ]
@@ -46,6 +49,7 @@ dev = [
     "pre-commit>=4.5.1",
     "pandas-stubs>=2.3.0",
     "pytest-cov>=7.0.0",
+    "vulture>=2.15",
 ]
 
 [build-system]
@@ -93,7 +97,7 @@ warn_unused_configs = true
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["streamlit.*", "plotly.*", "chromadb.*"]
+module = ["streamlit.*", "chromadb.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

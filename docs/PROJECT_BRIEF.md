@@ -176,9 +176,11 @@ Phase 2 adds Learning Agent characteristics:
 - **Docling** for universal document parsing (PDF, DOCX, Excel, PowerPoint, HTML, images) — integrated, Phase 2 UI exposure
 
 ### Frontend
-- **Streamlit** with chat-first interface (`st.chat_message`, `st.chat_input`)
-- Analysis mode presets (Cost-Optimized / Balanced / Deep Analysis)
-- Inline editable data tables (`st.data_editor`)
+- **FastAPI** backend — HTTP layer in front of `agent/interface.py`; five endpoints (`/analyze`, `/extract`, `/extract-file`, `/continue`, `/graph-schema`)
+- **Next.js** (App Router, TypeScript) — chat-first UI with two-phase layout (pre-results / post-results split view)
+- **React Flow** — interactive process graph consuming `GraphSchema` JSON from the backend
+- **Tailwind CSS + shadcn/ui** — design system and component primitives
+- Analysis mode presets (Cost-Optimized / Balanced / Deep Analysis), investigation depth slider, LLM provider selection, business profile and constraints — all in a collapsible settings panel
 
 ### Data Models
 - **Pydantic BaseModel** for domain models (ProcessStep, Constraints, AnalysisInsight)
@@ -274,9 +276,25 @@ flowchart LR
 
 ```
 processiq/
-├── app.py                     # Streamlit entry point
+├── api/                           # FastAPI backend
+│   ├── main.py                    # Endpoints: /analyze, /extract, /extract-file, /continue, /graph-schema
+│   └── schemas.py                 # HTTP request/response Pydantic models
+│
+├── frontend/                      # Next.js frontend (TypeScript)
+│   ├── app/
+│   │   └── page.tsx               # Main page — chat + results two-phase layout
+│   ├── components/
+│   │   ├── chat/                  # ChatInterface, EmptyState
+│   │   ├── visualization/         # ProcessGraph (React Flow, consumes GraphSchema)
+│   │   ├── results/               # ProcessIntelligencePanel (issues, recommendations, findings)
+│   │   ├── settings/              # SettingsDrawer (LLM provider, mode, cycles, constraints, profile)
+│   │   └── layout/                # Header, LeftRail, ContextStrip, RevealTransition
+│   └── lib/
+│       ├── api.ts                 # Typed fetch client for all FastAPI endpoints
+│       └── types.ts               # TypeScript types mirroring Python Pydantic models
+│
 ├── src/
-│   └── processiq/
+│   └── processiq/                 # Python agent package
 │       ├── __init__.py
 │       ├── config.py              # pydantic-settings configuration
 │       ├── constants.py           # String constants
@@ -288,68 +306,46 @@ processiq/
 │       ├── models/                # Pydantic domain models
 │       │   ├── process.py         # ProcessStep (with group_id/group_type), ProcessData
 │       │   ├── constraints.py     # Constraints, ConflictResult, Priority
-│       │   ├── analysis.py        # AnalysisResult (legacy)
 │       │   ├── insight.py         # AnalysisInsight, Issue, Recommendation, NotAProblem
-│       │   ├── memory.py          # BusinessProfile, AnalysisMemory
-│       │   └── clarification.py   # ClarifyingQuestion, ClarificationResponse
+│       │   └── memory.py          # BusinessProfile, AnalysisMemory
 │       │
 │       ├── analysis/              # Pure algorithms (no LLM)
 │       │   ├── metrics.py         # ProcessMetrics, calculate_process_metrics()
 │       │   ├── roi.py             # ROI with pessimistic/likely/optimistic ranges
 │       │   ├── confidence.py      # Data completeness scoring
-│       │   └── visualization.py   # GraphSchema, build_graph_schema(), build_process_figure()
+│       │   └── visualization.py   # GraphSchema (renderer-agnostic DTO), build_graph_schema()
 │       │
 │       ├── agent/                 # LangGraph agent
 │       │   ├── state.py           # AgentState (TypedDict)
-│       │   ├── nodes.py           # check_context, initial_analysis, investigate, finalize nodes
+│       │   ├── nodes.py           # check_context, initial_analysis, investigate, finalize
 │       │   ├── edges.py           # Conditional routing
 │       │   ├── graph.py           # Graph construction and compilation
 │       │   ├── tools.py           # Investigation tools with InjectedState
-│       │   ├── interface.py       # Clean API for UI (analyze, extract, continue)
+│       │   ├── interface.py       # Clean API for the HTTP layer (analyze, extract, continue)
 │       │   └── context.py         # Conversation context builder for LLM calls
 │       │
 │       ├── prompts/               # Jinja2 prompt templates
 │       │   ├── __init__.py        # render_prompt() loader utility
-│       │   ├── system.j2          # Base system prompt with definitions
-│       │   ├── extraction.j2      # Process extraction + interview + edit
-│       │   ├── analyze.j2         # LLM-based process analysis
-│       │   ├── investigation_system.j2  # System prompt for investigation loop
-│       │   ├── clarification.j2   # Generate clarification questions
-│       │   ├── followup.j2        # Post-analysis follow-up conversation context
-│       │   └── improvement_suggestions.j2  # Post-extraction guidance
+│       │   ├── system.j2
+│       │   ├── extraction.j2
+│       │   ├── analyze.j2
+│       │   ├── investigation_system.j2
+│       │   ├── clarification.j2
+│       │   └── improvement_suggestions.j2
 │       │
 │       ├── ingestion/             # Data loading
-│       │   ├── csv_loader.py      # CSV parsing with pandas
-│       │   ├── excel_loader.py    # Excel parsing with openpyxl
+│       │   ├── csv_loader.py
+│       │   ├── excel_loader.py
 │       │   ├── normalizer.py      # LLM-powered extraction with Instructor
-│       │   └── docling_parser.py  # Universal document parsing (Phase 2: PDF, DOCX, images)
+│       │   └── docling_parser.py  # Universal document parsing (PDF, DOCX, images)
 │       │
 │       ├── persistence/           # Session persistence
 │       │   ├── checkpointer.py    # LangGraph SqliteSaver wrapper
 │       │   └── user_store.py      # UUID-based user identification
 │       │
-│       ├── export/                # Output generation
-│       │   ├── csv_export.py      # Jira-compatible CSV export
-│       │   └── summary.py         # Text and markdown reports
-│       │
-│       └── ui/                    # Streamlit frontend
-│           ├── state.py           # Session state management (ChatState enum)
-│           ├── views.py           # Render functions
-│           ├── handlers.py        # Input handlers (text, file, buttons)
-│           ├── styles.py          # CSS and design system
-│           └── components/
-│               ├── chat.py            # Chat interface, message rendering
-│               ├── advanced_options.py # Sidebar: constraints, context, mode
-│               ├── results_display.py  # Summary-first analysis display
-│               ├── process_visualization.py  # Plotly flowchart (temporary — replaced by React Flow in Task 2.5)
-│               ├── export_section.py   # Download buttons
-│               ├── privacy_notice.py   # Two-tier privacy explanation
-│               ├── data_review.py      # Data confirmation cards
-│               ├── process_input.py    # Form-based step editor
-│               ├── header.py           # App title and subtitle
-│               ├── constraints_input.py # Constraint entry widgets
-│               ├── context_input.py    # Business context fields
-│               └── clarification_form.py # Structured question rendering
+│       └── export/                # Output generation
+│           ├── csv_export.py      # Jira-compatible CSV export
+│           └── summary.py         # Text and markdown reports
 │
 ├── tests/
 │   ├── unit/
@@ -361,11 +357,8 @@ processiq/
 │   ├── sample_context.json
 │   └── sample_messy.xlsx
 │
-├── docs/
-│   ├── PROJECT_BRIEF.md           # This file
-│   └── CONVERSATION_FLOW.md       # Chat UI specification
-│
-└── pyproject.toml
+└── docs/
+    └── PROJECT_BRIEF.md           # This file
 ```
 
 ---
@@ -619,7 +612,7 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 
 ---
 
-## What's Implemented (Phase 1 + Phase 2 Tasks 1–2)
+## What's Implemented (Phase 1 + Phase 2 Tasks 1–2.5)
 
 ### Core Analysis Pipeline
 
@@ -635,25 +628,18 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 - Export (CSV, text, markdown)
 - Process visualization: interactive flowchart with severity-colored nodes, dependency edges, and Before/After toggle
 
-### Chat-First UI
+### Next.js Frontend + FastAPI Backend
 
-- Chat interface as primary interaction
-- File drop zone (CSV and Excel)
-- Smart interviewer pattern (extract OR clarify, never both)
-- Inline editable data table always visible after extraction
-- Advanced options sidebar (constraints, business context with revenue range, analysis mode, LLM provider)
-- Business context fields: industry, company size, annual revenue, regulatory level, free-text notes
-- Privacy notice component (two-tier explanation)
-- Summary-first results display: process flow visualization → issues → recommendations
+- Two-phase layout: chat-first (Phase 1) transitions to split-column view on first analysis result, with animated reveal transition
+- Chat interface: message history with auto-collapse, animated status chips, file upload
+- Inline editable process steps table after extraction
+- Interactive process graph (React Flow): nodes colored by severity, sized by time share, dependency edges, Before/After toggle
+- Results panel: summary → issues → recommendations → investigation findings → core value work
 - Progressive disclosure on recommendations (3 layers: summary, plain explanation, concrete next steps)
-- Draft analysis preview after extraction
-- Targeted follow-up questions based on data gaps
-- "Estimate Missing" button for step-level gaps
-- Post-analysis follow-up conversation (LLM-driven with full analysis context)
-- Step grouping: alternative steps (either/or) and parallel steps (simultaneous) with computed step numbering
-- Recommendation feedback loop: thumbs up/down per recommendation with optional rejection reason; feedback injected into subsequent analyses so the LLM avoids rejected approaches
-- Investigation findings display: collapsible section showing tool call results from the agentic investigation loop
-- Agent cycle depth slider: optional UI control for investigation loop depth (enabled via `AGENT_LOOP_SLIDER_ENABLED`)
+- Settings panel: LLM provider, analysis mode, investigation depth slider (1–10 cycles), constraints (budget, timeline, no-layoffs, no-new-hires), business profile (industry, company size, regulatory environment)
+- Non-default settings indicator in header
+- Context strip in results view: health pill, constraint chips, KPI tiles
+- FastAPI backend: rate limiting (slowapi), input length caps, file extension whitelist, file size enforcement, session TTL with LRU eviction
 
 ### LLM Flexibility
 
@@ -790,15 +776,15 @@ Business context fields (industry, company size, annual revenue, regulatory leve
 
 ## Phase 2 Roadmap (Active)
 
-### Process Visualization
+### Process Visualization (complete)
 - Interactive flowchart with bottleneck severity coloring
-- Before/after recommendation toggle
-- Renderer-agnostic `GraphSchema` DTO — usable from Streamlit now, React Flow later
+- Before/After recommendation toggle
+- Renderer-agnostic `GraphSchema` DTO consumed by React Flow
 
-### Frontend Migration
-- FastAPI backend: Python agent logic exposed as HTTP endpoints
-- Next.js + React Flow frontend: professional SaaS-style UI with interactive process graph
-- Replaces Streamlit; Python backend unchanged
+### Frontend Migration (complete)
+- FastAPI backend: Python agent logic exposed as HTTP endpoints with rate limiting, input validation, and session TTL management
+- Next.js + React Flow frontend: two-phase layout (chat-first → split results view), interactive process graph, settings panel with LLM provider, analysis mode, investigation depth, constraints, and business profile
+- Python backend (`agent/`, `analysis/`, `models/`) unchanged
 
 ### Persistent Memory + ChromaDB RAG
 - **Business profile persistence:** Industry, constraints, preferences stored in SQLite across sessions

@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --page-bg: #080c14;
+    --surface: #0f1623;
+    --card: #141d2e;
+    --border: #1e2d45;
+    --hover: #192236;
+    --accent: #19b7c0;
+    --accent-strong: #22d3ee;
+    --text: #e2e8f0;
+    --muted: #7a91b0;
+    --faint: #3d5270;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+  }
+
+  body {
+    @apply bg-dark-bg text-ink;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-feature-settings: "kern" 1, "liga" 1;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* Scrollbar styling for dark theme */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #1e2d45;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #2a3f5e;
+  }
+
+  /* Native select / option dark styling */
+  select option {
+    background: #0f1623;
+    color: #e2e8f0;
+  }
+
+  /* Focus visible outline */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+}
+
+/* -----------------------------------------------------------------------
+   Dot-grid background texture (Phase 1 main area)
+------------------------------------------------------------------------ */
+.dot-grid-bg {
+  background-image: radial-gradient(circle, rgba(30, 45, 69, 0.6) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* -----------------------------------------------------------------------
+   Results panel entrance animation
+------------------------------------------------------------------------ */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* -----------------------------------------------------------------------
+   Reveal transition animations
+------------------------------------------------------------------------ */
+@keyframes revealFlash {
+  0% { opacity: 0; }
+  30% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes healthScoreAppear {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(0.95); }
+}
+
+/* -----------------------------------------------------------------------
+   Process-building pulsing dot
+------------------------------------------------------------------------ */
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.pulse-dot {
+  animation: pulseDot 1.4s ease-in-out infinite;
+}
+
+/* -----------------------------------------------------------------------
+   React Flow overrides for dark theme
+------------------------------------------------------------------------ */
+.react-flow__node {
+  font-size: 13px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+
+.react-flow__background {
+  background-color: #0f1623 !important;
+}
+
+.react-flow__controls {
+  background: #141d2e !important;
+  border: 1px solid #1e2d45 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.react-flow__controls-button {
+  background: #141d2e !important;
+  border-bottom: 1px solid #1e2d45 !important;
+  color: #7a91b0 !important;
+  fill: #7a91b0 !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #192236 !important;
+}

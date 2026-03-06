@@ -271,28 +271,42 @@ New AnalysisInsight with adjusted recommendations
 
 ```
 processiq/
-├── app.py                     # Streamlit entry point
-├── src/processiq/
+├── api/                       # FastAPI backend
+│   ├── main.py                # Endpoints: /analyze, /extract, /extract-file, /continue, /graph-schema
+│   └── schemas.py             # HTTP request/response models
+│
+├── frontend/                  # Next.js frontend (TypeScript)
+│   ├── app/
+│   │   └── page.tsx           # Main page (chat + results layout)
+│   ├── components/
+│   │   ├── chat/              # ChatInterface, EmptyState
+│   │   ├── visualization/     # ProcessGraph (React Flow)
+│   │   ├── results/           # ProcessIntelligencePanel
+│   │   ├── settings/          # SettingsDrawer (LLM, mode, constraints, profile)
+│   │   └── layout/            # Header, LeftRail, ContextStrip
+│   └── lib/
+│       ├── api.ts             # Typed API client
+│       └── types.ts           # TypeScript types mirroring Python models
+│
+├── src/processiq/             # Python agent package (unchanged by frontend migration)
 │   ├── config.py              # pydantic-settings configuration
-│   ├── constants.py
-│   ├── exceptions.py          # Custom exception hierarchy
 │   ├── llm.py                 # LLM factory (Anthropic/OpenAI/Ollama)
-│   ├── logging_config.py
 │   ├── model_presets.py       # Analysis mode presets
 │   │
 │   ├── agent/                 # LangGraph agent
 │   │   ├── state.py           # AgentState (TypedDict)
-│   │   ├── nodes.py           # Node functions (check_context, initial_analysis, investigate, finalize)
+│   │   ├── nodes.py           # check_context, initial_analysis, investigate, finalize
 │   │   ├── edges.py           # Conditional routing
 │   │   ├── graph.py           # Graph construction
 │   │   ├── tools.py           # Investigation tools (InjectedState, native function calling)
-│   │   ├── interface.py       # Clean API for UI layer
+│   │   ├── interface.py       # Clean API for the HTTP layer
 │   │   └── context.py         # Conversation context builder
 │   │
 │   ├── analysis/              # Pure algorithms (no LLM)
 │   │   ├── metrics.py         # Process metrics calculation
 │   │   ├── roi.py             # ROI with PERT-style ranges
-│   │   └── confidence.py      # Data completeness scoring
+│   │   ├── confidence.py      # Data completeness scoring
+│   │   └── visualization.py   # GraphSchema DTO + layout algorithm
 │   │
 │   ├── ingestion/
 │   │   ├── csv_loader.py
@@ -314,21 +328,13 @@ processiq/
 │   │   ├── system.j2
 │   │   ├── extraction.j2
 │   │   ├── analyze.j2
-│   │   ├── investigation_system.j2  # System prompt for investigation loop
+│   │   ├── investigation_system.j2
 │   │   ├── clarification.j2
-│   │   ├── followup.j2
 │   │   └── improvement_suggestions.j2
 │   │
-│   ├── export/
-│   │   ├── csv_export.py      # Jira-compatible CSV
-│   │   └── summary.py         # Text and markdown reports
-│   │
-│   └── ui/
-│       ├── state.py           # Session state management
-│       ├── views.py           # Render functions
-│       ├── handlers.py        # Input handlers
-│       ├── styles.py          # CSS
-│       └── components/        # Streamlit UI components
+│   └── export/
+│       ├── csv_export.py      # Jira-compatible CSV
+│       └── summary.py         # Text and markdown reports
 │
 ├── tests/
 │   ├── unit/
@@ -349,8 +355,10 @@ processiq/
 | Agent orchestration | LangGraph | Stateful graph with conditional branching |
 | LLM providers | OpenAI / Anthropic / Ollama | Analysis, extraction, clarification |
 | Structured output | Instructor + Pydantic | Validated LLM responses, auto-retry on failure |
-| Document parsing | Docling | PDF, DOCX, PPTX, Excel, HTML, images — Phase 2 |
-| UI | Streamlit | Chat-first interface |
+| Document parsing | Docling | PDF, DOCX, PPTX, Excel, HTML, images |
+| API backend | FastAPI + uvicorn | HTTP endpoints in front of the agent layer |
+| Frontend | Next.js + React Flow | Chat UI, interactive process visualization |
+| Styling | Tailwind CSS + shadcn/ui | Design system, component primitives |
 | Configuration | pydantic-settings | Type-safe `.env` config |
 | Prompt templating | Jinja2 | Separate `.j2` files, no inline strings |
 | Observability | LangSmith | Agent traces, token usage, node timing |
@@ -360,13 +368,23 @@ processiq/
 
 ## Quick Start
 
+**Backend (FastAPI):**
 ```bash
 git clone https://github.com/SkybrushThriftwood/processIQ.git
 cd processiq
 uv sync --group dev
 cp .env.example .env
 # Edit .env — add your OPENAI_API_KEY or ANTHROPIC_API_KEY
-uv run streamlit run app.py
+uvicorn api.main:app --reload
+# API docs: http://localhost:8000/docs
+```
+
+**Frontend (Next.js):**
+```bash
+cd frontend
+pnpm install
+pnpm dev
+# App: http://localhost:3000
 ```
 
 ---
@@ -395,7 +413,7 @@ See [ROADMAP.md](ROADMAP.md) for the full plan with rationale and sequencing.
 
 **Phase 2 (active):**
 - Process visualization — interactive flowchart with severity-colored nodes and Before/After toggle (complete)
-- Frontend migration — FastAPI backend + Next.js/React Flow frontend
+- Frontend migration — FastAPI backend + Next.js/React Flow frontend (complete)
 - Persistent memory — cross-session business profile, ChromaDB RAG
 - UX improvements — concrete hours/year metrics, visible constraint reasoning
 - Testing and CI/CD

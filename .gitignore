@@ -44,6 +44,11 @@ Thumbs.db
 docs/private/
 
 
+# Node.js
+node_modules/
+frontend/.next/
+frontend/out/
+
 # ChromaDB local storage
 .chroma/
 

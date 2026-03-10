@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from processiq.analysis.visualization import GraphSchema
 from processiq.models import (
     AnalysisInsight,
     BusinessProfile,
@@ -47,10 +48,36 @@ class AnalyzeRequest(BaseModel):
 class AnalyzeResponse(BaseModel):
     message: str
     analysis_insight: AnalysisInsight | None = None
+    graph_schema: GraphSchema | None = None
     thread_id: str | None = None
     is_error: bool = False
     error_code: str | None = None
     reasoning_trace: list[str] = Field(default_factory=list)
+    context_sources: list[str] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# /profile
+# ---------------------------------------------------------------------------
+
+
+class ProfileResponse(BaseModel):
+    profile: BusinessProfile | None = None
+
+
+# ---------------------------------------------------------------------------
+# /feedback
+# ---------------------------------------------------------------------------
+
+
+class FeedbackRequest(BaseModel):
+    accepted: list[str] = Field(default_factory=list)
+    rejected: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+
+class FeedbackResponse(BaseModel):
+    status: str = "ok"
 
 
 # ---------------------------------------------------------------------------
@@ -85,6 +112,30 @@ class ExtractResponse(BaseModel):
 
 # No dedicated request model — file comes in as UploadFile.
 # Response reuses ExtractResponse.
+
+
+# ---------------------------------------------------------------------------
+# /sessions
+# ---------------------------------------------------------------------------
+
+
+class AnalysisSessionSummary(BaseModel):
+    """Read-only summary of a past analysis session for the Library view."""
+
+    session_id: str
+    process_name: str
+    process_description: str
+    industry: str
+    timestamp: str
+    step_names: list[str]
+    bottlenecks_found: list[str]
+    suggestions_offered: list[str]
+    suggestions_accepted: list[str]
+    suggestions_rejected: list[str]
+
+
+class SessionsResponse(BaseModel):
+    sessions: list[AnalysisSessionSummary]
 
 
 # ---------------------------------------------------------------------------

@@ -55,12 +55,17 @@ class AgentState(TypedDict, total=False):
     # User feedback on recommendations (for self-improving analysis)
     feedback_history: dict[str, dict[str, object]]
 
-    # Agentic investigation loop (Phase 2)
+    # Agentic investigation loop
     process_metrics: Any | None  # ProcessMetrics — cached from initial_analysis_node
     cycle_count: int  # LLM decision turns completed
     max_cycles_override: (
         int | None
     )  # from UI slider; None = use settings.agent_max_cycles
+
+    # Persistent memory context (RAG)
+    similar_past_analyses: list[dict[str, Any]]  # from ChromaDB retrieval
+    persistent_rejections: list[tuple[str, str]]  # (rec_title, reason) across sessions
+    cross_session_patterns: list[str]  # detected recurring patterns
 
 
 # Initial state factory
@@ -72,6 +77,9 @@ def create_initial_state(
     llm_provider: str | None = None,
     feedback_history: dict[str, dict[str, object]] | None = None,
     max_cycles_override: int | None = None,
+    similar_past_analyses: list[dict[str, Any]] | None = None,
+    persistent_rejections: list[tuple[str, str]] | None = None,
+    cross_session_patterns: list[str] | None = None,
 ) -> AgentState:
     """Create initial agent state with required fields."""
     return AgentState(
@@ -94,4 +102,7 @@ def create_initial_state(
         process_metrics=None,
         cycle_count=0,
         max_cycles_override=max_cycles_override,
+        similar_past_analyses=similar_past_analyses or [],
+        persistent_rejections=persistent_rejections or [],
+        cross_session_patterns=cross_session_patterns or [],
     )

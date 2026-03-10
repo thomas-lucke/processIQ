@@ -29,3 +29,8 @@ At the end of the reporting period (usually monthly), the account manager pulls 
 The report is sent to the client and a review call is scheduled. The call takes 30 minutes, costs $28, has a 10% error rate (client dissatisfaction requiring follow-up), and involves 1 account manager.
 
 We have 30 staff: 6 account managers, 4 strategists, 10 creatives, 4 ad specialists, 3 project managers, and 3 in management and admin.
+
+
+______________________
+
+I forgot to mention that in 20 % of the cases when the campaign goes live, we run into some issues that need solving. SO that usually takes about 2 hours, costs 80$ and involves 2 people to get it done fast.

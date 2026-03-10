@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { analyzeProcess, extractFile, extractText } from "@/lib/api";
 import type {
   AnalysisInsight,
   BusinessProfile,
   Constraints,
+  GraphSchema,
   ProcessData,
   UIMessage,
 } from "@/lib/types";
@@ -33,8 +34,9 @@ interface ChatInterfaceProps {
   llmProvider?: "anthropic" | "openai" | "ollama" | null;
   maxCyclesOverride?: number | null;
   hasResults?: boolean;
+  currentProcessData?: ProcessData | null;
   onProcessExtracted?: (data: ProcessData) => void;
-  onAnalysisComplete?: (insight: AnalysisInsight, threadId: string | null, runLabel: string) => void;
+  onAnalysisComplete?: (insight: AnalysisInsight, threadId: string | null, runLabel: string, graphSchema?: GraphSchema | null) => void;
 }
 
 const EXTRACTING_STEPS = [
@@ -144,6 +146,7 @@ export function ChatInterface({
   llmProvider,
   maxCyclesOverride,
   hasResults = false,
+  currentProcessData,
   onProcessExtracted,
   onAnalysisComplete,
 }: ChatInterfaceProps) {
@@ -157,11 +160,14 @@ export function ChatInterface({
   const [status, setStatus] = useState<AIStatus>("idle");
   const [threadId, setThreadId] = useState<string | null>(null);
   const [pendingProcessData, setPendingProcessData] = useState<ProcessData | null>(null);
+  // True when extraction returned new/edited process data that hasn't been re-analysed yet
+  const [hasPendingEdit, setHasPendingEdit] = useState(false);
   const [analysisRuns, setAnalysisRuns] = useState<AnalysisRun[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false); // synchronous guard against concurrent submissions
   const isLoading = status === "extracting" || status === "analyzing";
 
   const addMessage = useCallback((msg: ChatMessage) => {
@@ -175,7 +181,10 @@ export function ChatInterface({
 
   useEffect(() => { if (!isLoading) inputRef.current?.focus(); }, [isLoading]);
 
-  const uiMessages: UIMessage[] = messages.map((m) => ({ role: m.role, content: m.content }));
+  const uiMessages: UIMessage[] = useMemo(
+    () => messages.map((m) => ({ role: m.role, content: m.content })),
+    [messages]
+  );
 
   const runAnalysis = useCallback(async (process: ProcessData) => {
     setStatus("analyzing");
@@ -192,8 +201,8 @@ export function ChatInterface({
       setAnalysisRuns((prev) => [...prev, { label: runLabel, timestamp, messageIndex: messages.length }]);
       addMessage({ role: "assistant", content: `Analysis complete - results shown on the right. (Run: ${runLabel})`, summary: `Analysis: ${runLabel}` });
       setStatus("idle");
-      setPendingProcessData(null);
-      onAnalysisComplete?.(result.analysis_insight, result.thread_id ?? null, runLabel);
+      setHasPendingEdit(false);
+      onAnalysisComplete?.(result.analysis_insight, result.thread_id ?? null, runLabel, result.graph_schema);
     } catch (err) {
       addMessage({ role: "assistant", content: `Analysis error: ${err instanceof Error ? err.message : "Unknown error"}`, isError: true });
       setStatus("error"); setTimeout(() => setStatus("idle"), 2000);
@@ -202,28 +211,45 @@ export function ChatInterface({
 
   const handleTextSubmit = useCallback(async (overrideText?: string) => {
     const text = (overrideText ?? input).trim();
-    if (!text || isLoading) return;
+    if (!text || isLoading || submittingRef.current) return;
+    submittingRef.current = true;
     if (!overrideText) setInput("");
     addMessage({ role: "user", content: text, summary: `You: "${text.slice(0, 40)}${text.length > 40 ? "..." : ""}"` });
-    if (pendingProcessData && /^(yes|confirm|ok|looks? good|correct|run|analyze)\.?$/i.test(text)) {
-      await runAnalysis(pendingProcessData); return;
-    }
-    setStatus("extracting");
     try {
-      const result = await extractText({ text, analysis_mode: analysisMode, current_process_data: pendingProcessData ?? undefined, ui_messages: uiMessages, constraints, profile, llm_provider: llmProvider ?? null });
+      if (pendingProcessData && /^(yes|confirm|ok|looks? good|correct|run|analyze)\.?$/i.test(text)) {
+        await runAnalysis(pendingProcessData); return;
+      }
+      // After analysis has run, use the confirmed process data as context for edits
+      const activeProcessData = pendingProcessData ?? (hasResults ? currentProcessData : null);
+
+      setStatus("extracting");
+      const result = await extractText({ text, analysis_mode: analysisMode, current_process_data: activeProcessData ?? undefined, ui_messages: uiMessages, constraints, profile, llm_provider: llmProvider ?? null });
       if (result.is_error) {
         addMessage({ role: "assistant", content: result.message, isError: true });
         setStatus("error"); setTimeout(() => setStatus("idle"), 2000); return;
       }
       setStatus(result.needs_input ? "needs_clarification" : "idle");
       addMessage({ role: "assistant", content: result.message, summary: `Assistant: "${result.message.slice(0, 40)}${result.message.length > 40 ? "..." : ""}"` });
-      if (result.process_data) { setPendingProcessData(result.process_data); onProcessExtracted?.(result.process_data); if (!result.needs_input) setStatus("idle"); }
+      if (result.process_data) {
+        setPendingProcessData(result.process_data);
+        onProcessExtracted?.(result.process_data);
+        if (!result.needs_input) {
+          setStatus("idle");
+          // Mark as pending edit so the re-analyse button appears (only after first analysis)
+          if (hasResults) setHasPendingEdit(true);
+        } else if (hasResults) {
+          // needs_input=true but we still have updated data — show re-analyse button
+          setHasPendingEdit(true);
+        }
+      }
       if (result.improvement_suggestions) addMessage({ role: "assistant", content: result.improvement_suggestions, summary: "Assistant: improvement suggestions" });
     } catch (err) {
       addMessage({ role: "assistant", content: `Error: ${err instanceof Error ? err.message : "Unknown error"}`, isError: true });
       setStatus("error"); setTimeout(() => setStatus("idle"), 2000);
+    } finally {
+      submittingRef.current = false;
     }
-  }, [input, isLoading, pendingProcessData, analysisMode, uiMessages, constraints, profile, addMessage, runAnalysis, onProcessExtracted]);
+  }, [input, isLoading, pendingProcessData, hasResults, currentProcessData, analysisMode, uiMessages, constraints, profile, addMessage, runAnalysis, onProcessExtracted]);
 
   const handleFileUpload = useCallback(async (file: File) => {
     addMessage({ role: "user", content: `Uploaded: ${file.name}`, summary: `You: uploaded ${file.name}` });
@@ -291,14 +317,14 @@ export function ChatInterface({
         <div ref={bottomRef} />
       </div>
 
-      {/* Run analysis button — shown in Phase 1 inside chat, hidden in Phase 2 (button is in Header) */}
-      {pendingProcessData && !isLoading && !hasResults && (
+      {/* Run analysis button — shown before first analysis, or after an edit is confirmed */}
+      {pendingProcessData && !isLoading && (!hasResults || hasPendingEdit) && (
         <div className="px-4 pb-2 flex-shrink-0">
           <button
             onClick={handleRunAnalysis}
             className="w-full py-2 text-sm font-semibold rounded-lg bg-accent text-dark-bg hover:bg-accent/90 hover:shadow-btn-accent transition-all duration-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
           >
-            Run Analysis — {pendingProcessData.name}
+            {hasResults ? `Re-analyse — ${pendingProcessData.name}` : `Run Analysis — ${pendingProcessData.name}`}
           </button>
         </div>
       )}

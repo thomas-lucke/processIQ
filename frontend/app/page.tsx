@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   AnalysisInsight,
   BusinessProfile,
@@ -9,13 +9,14 @@ import type {
   GraphSchema,
   ProcessData,
 } from "@/lib/types";
-import { getGraphSchema } from "@/lib/api";
+import { deleteUserData, getProfile, saveProfile } from "@/lib/api";
 import { SettingsDrawer } from "@/components/settings/SettingsDrawer";
 import { Header } from "@/components/layout/Header";
-import { LeftRail } from "@/components/layout/LeftRail";
+import { LeftRail, type NavItem } from "@/components/layout/LeftRail";
 import { ContextStrip } from "@/components/layout/ContextStrip";
 import { EmptyState } from "@/components/chat/EmptyState";
 import { RevealTransition, computeHealth } from "@/components/layout/RevealTransition";
+import { LibraryPanel } from "@/components/library/LibraryPanel";
 
 const ChatInterface = dynamic(
   () => import("@/components/chat/ChatInterface").then((m) => m.ChatInterface),
@@ -66,12 +67,40 @@ export default function HomePage() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [runLabel, setRunLabel] = useState<string | null>(null);
   const [highlightedSteps, setHighlightedSteps] = useState<string[]>([]);
+  const [chatKey, setChatKey] = useState(0);
 
   const [profile, setProfile] = useState<BusinessProfile>(DEFAULT_PROFILE);
   const [constraints, setConstraints] = useState<Constraints>(DEFAULT_CONSTRAINTS);
   const [analysisMode, setAnalysisMode] = useState("balanced");
   const [llmProvider, setLlmProvider] = useState<"anthropic" | "openai" | "ollama">("anthropic");
   const [maxCycles, setMaxCycles] = useState(3);
+
+  // Track whether the profile has been loaded from the server (to avoid saving before loading)
+  const profileLoadedRef = useRef(false);
+
+  // Load saved profile on mount
+  useEffect(() => {
+    getProfile().then((res) => {
+      if (res.profile) {
+        setProfile(res.profile);
+      }
+      profileLoadedRef.current = true;
+    }).catch(() => {
+      profileLoadedRef.current = true;
+    });
+  }, []);
+
+  // Save profile to server whenever it changes (after initial load)
+  useEffect(() => {
+    if (!profileLoadedRef.current) return;
+    const timer = setTimeout(() => {
+      saveProfile(profile).catch(() => {/* best-effort */});
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [profile]);
+
+  // Active nav item — drives Library vs Analyze view
+  const [activeNav, setActiveNav] = useState<NavItem>("analyze");
 
   // Settings panel open state — shared between LeftRail and Header settings gear
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -99,27 +128,18 @@ export default function HomePage() {
   const [pendingProcessData, setPendingProcessData] = useState<ProcessData | null>(null);
   const [isAnalysisLoading, setIsAnalysisLoading] = useState(false);
 
-  async function handleAnalysisComplete(
+  function handleAnalysisComplete(
     newInsight: AnalysisInsight,
     newThreadId: string | null,
-    label: string
+    label: string,
+    newGraphSchema?: GraphSchema | null,
   ) {
     setInsight(newInsight);
     setThreadId(newThreadId);
     setRunLabel(label);
     setHighlightedSteps([]);
     setIsAnalysisLoading(false);
-
-    if (newThreadId) {
-      try {
-        const schema = await getGraphSchema(newThreadId);
-        setGraphSchema(schema);
-      } catch {
-        setGraphSchema(null);
-      }
-    }
-
-    // Trigger reveal transition
+    setGraphSchema(newGraphSchema ?? null);
     setRevealState("revealing");
   }
 
@@ -136,6 +156,20 @@ export default function HomePage() {
   const handleEmptyStatePrompt = useCallback((_text: string) => {
     setHasMessages(true);
   }, []);
+
+  function handleNewAnalysis() {
+    setProcessData(null);
+    setInsight(null);
+    setGraphSchema(null);
+    setThreadId(null);
+    setRunLabel(null);
+    setHighlightedSteps([]);
+    setHasMessages(false);
+    setPendingProcessData(null);
+    setIsAnalysisLoading(false);
+    setRevealState("idle");
+    setChatKey((k) => k + 1);
+  }
 
   // Compute health for reveal transition
   const revealHealth = insight
@@ -180,6 +214,8 @@ export default function HomePage() {
       >
         {/* Left rail — always present */}
         <LeftRail
+          activeNav={activeNav}
+          onNavChange={setActiveNav}
           settingsOpen={settingsOpen}
           onSettingsToggle={() => setSettingsOpen(!settingsOpen)}
         />
@@ -201,6 +237,8 @@ export default function HomePage() {
               onAnalysisModeChange={setAnalysisMode}
               onLlmProviderChange={setLlmProvider}
               onMaxCyclesChange={setMaxCycles}
+              onNewAnalysis={handleNewAnalysis}
+              onDeleteData={deleteUserData}
             />
           </div>
         )}
@@ -208,84 +246,98 @@ export default function HomePage() {
         {/* Main content area */}
         <div className="flex flex-1 overflow-hidden transition-all duration-300 ease-in-out">
 
-          {/* Chat column */}
-          <div
-            className="flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
-            style={{
-              width: hasResults ? "40%" : "100%",
-              borderRight: hasResults ? "1px solid #1e2d45" : "none",
-            }}
-          >
-            <div
-              className={`flex flex-col flex-1 overflow-hidden${!hasResults ? " dot-grid-bg" : ""}`}
-              style={{ backgroundColor: hasResults ? "#0f1623" : "#080c14" }}
-            >
-              {/* Phase 1 empty state — shown before any messages */}
-              {!hasResults && !hasMessages && (
-                <div className="flex-shrink-0 pt-6">
-                  <EmptyState onSelectPrompt={handleEmptyStatePrompt} />
-                </div>
-              )}
-
-              {/* Chat — centered + constrained in Phase 1, full-width in Phase 2 */}
-              <div
-                className="flex flex-col transition-all duration-300"
-                style={{
-                  flex: 1,
-                  maxWidth: hasResults ? "none" : "800px",
-                  width: "100%",
-                  margin: hasResults ? "0" : "0 auto",
-                  padding: hasResults ? "16px 16px 0" : "0 24px 0",
-                  minHeight: 0,
-                }}
-              >
-                <ChatInterface
-                  constraints={constraints}
-                  profile={profile}
-                  analysisMode={analysisMode}
-                  llmProvider={llmProvider}
-                  maxCyclesOverride={maxCycles !== 3 ? maxCycles : null}
-                  hasResults={hasResults}
-                  onProcessExtracted={handleProcessExtracted}
-                  onAnalysisComplete={handleAnalysisComplete}
-                />
-              </div>
-
-              {/* Process steps table */}
-              {processData && (
-                <div
-                  className="flex-shrink-0 transition-all duration-300 pb-4"
-                  style={{
-                    maxWidth: hasResults ? "none" : "800px",
-                    width: "100%",
-                    margin: hasResults ? "0" : "0 auto",
-                    padding: hasResults ? "0 16px" : "0 24px",
-                  }}
-                >
-                  <ProcessStepsTable processData={processData} onChange={setProcessData} />
-                </div>
-              )}
-            </div>
+          {/* Library view — kept mounted to avoid losing chat state when switching tabs */}
+          <div className={activeNav === "library" ? "flex-1 overflow-hidden" : "hidden"}>
+            <LibraryPanel />
           </div>
 
-          {/* Process Intelligence Panel — Phase 2 right column */}
-          {hasResults && insight && (
-            <main
-              className="overflow-hidden bg-dark-bg"
-              style={{
-                width: "60%",
-                animation: "fadeSlideIn 0.3s ease-out forwards",
-              }}
-            >
-              <ProcessIntelligencePanel
-                insight={insight}
-                graphSchema={graphSchema}
-                runLabel={runLabel}
-                highlightedSteps={highlightedSteps}
-                onHighlightSteps={setHighlightedSteps}
-              />
-            </main>
-          )}
+          {/* Analyze view — kept mounted so ChatInterface state survives tab switches */}
+          <div className={activeNav !== "library" ? "flex flex-1 overflow-hidden" : "hidden"}>
+            <>
+              {/* Chat column */}
+              <div
+                className="flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
+                style={{
+                  width: hasResults ? "40%" : "100%",
+                  borderRight: hasResults ? "1px solid #1e2d45" : "none",
+                }}
+              >
+                <div
+                  className={`flex flex-col flex-1 overflow-hidden${!hasResults ? " dot-grid-bg" : ""}`}
+                  style={{ backgroundColor: hasResults ? "#0f1623" : "#080c14" }}
+                >
+                  {/* Phase 1 empty state — shown before any messages */}
+                  {!hasResults && !hasMessages && (
+                    <div className="flex-shrink-0 pt-6">
+                      <EmptyState onSelectPrompt={handleEmptyStatePrompt} />
+                    </div>
+                  )}
+
+                  {/* Chat — centered + constrained in Phase 1, full-width in Phase 2 */}
+                  <div
+                    className="flex flex-col transition-all duration-300"
+                    style={{
+                      flex: 1,
+                      maxWidth: hasResults ? "none" : "800px",
+                      width: "100%",
+                      margin: hasResults ? "0" : "0 auto",
+                      padding: hasResults ? "16px 16px 0" : "0 24px 0",
+                      minHeight: 0,
+                    }}
+                  >
+                    <ChatInterface
+                      key={chatKey}
+                      constraints={constraints}
+                      profile={profile}
+                      analysisMode={analysisMode}
+                      llmProvider={llmProvider}
+                      maxCyclesOverride={maxCycles !== 3 ? maxCycles : null}
+                      hasResults={hasResults}
+                      currentProcessData={processData}
+                      onProcessExtracted={handleProcessExtracted}
+                      onAnalysisComplete={handleAnalysisComplete}
+                    />
+                  </div>
+
+                  {/* Process steps table */}
+                  {processData && (
+                    <div
+                      className="flex-shrink-0 transition-all duration-300 pb-4"
+                      style={{
+                        maxWidth: hasResults ? "none" : "800px",
+                        width: "100%",
+                        margin: hasResults ? "0" : "0 auto",
+                        padding: hasResults ? "0 16px" : "0 24px",
+                      }}
+                    >
+                      <ProcessStepsTable processData={processData} onChange={setProcessData} />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Process Intelligence Panel — Phase 2 right column */}
+              {hasResults && insight && (
+                <main
+                  className="overflow-hidden bg-dark-bg"
+                  style={{
+                    width: "60%",
+                    animation: "fadeSlideIn 0.3s ease-out forwards",
+                  }}
+                >
+                  <ProcessIntelligencePanel
+                    insight={insight}
+                    graphSchema={graphSchema}
+                    processData={processData}
+                    runLabel={runLabel}
+                    sessionId={threadId}
+                    highlightedSteps={highlightedSteps}
+                    onHighlightSteps={setHighlightedSteps}
+                  />
+                </main>
+              )}
+            </>
+          </div>
         </div>
       </div>
     </div>

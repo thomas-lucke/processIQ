@@ -113,6 +113,7 @@ export interface AnalysisInsight {
   confidence_notes?: string;
   investigation_findings?: string[];
   reasoning?: string;
+  context_sources?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -170,10 +171,12 @@ export interface AnalyzeRequest {
 export interface AnalyzeResponse {
   message: string;
   analysis_insight?: AnalysisInsight | null;
+  graph_schema?: GraphSchema | null;
   thread_id?: string | null;
   is_error: boolean;
   error_code?: string | null;
   reasoning_trace: string[];
+  context_sources: string[];
 }
 
 export interface ExtractTextRequest {
@@ -211,4 +214,39 @@ export interface ContinueResponse {
   needs_input: boolean;
   is_error: boolean;
   error_code?: string | null;
+}
+
+export interface ProfileResponse {
+  profile: BusinessProfile | null;
+}
+
+export interface FeedbackRequest {
+  accepted: string[];
+  rejected: string[];
+  reasons: string[];
+}
+
+export interface FeedbackResponse {
+  status: string;
+}
+
+// ---------------------------------------------------------------------------
+// Sessions (Library view) — mirrors api/schemas.py AnalysisSessionSummary
+// ---------------------------------------------------------------------------
+
+export interface AnalysisSessionSummary {
+  session_id: string;
+  process_name: string;
+  process_description: string;
+  industry: string;
+  timestamp: string;
+  step_names: string[];
+  bottlenecks_found: string[];
+  suggestions_offered: string[];
+  suggestions_accepted: string[];
+  suggestions_rejected: string[];
+}
+
+export interface SessionsResponse {
+  sessions: AnalysisSessionSummary[];
 }

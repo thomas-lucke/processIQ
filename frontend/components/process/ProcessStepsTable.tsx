@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ProcessData, ProcessStep } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +69,13 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [localSteps, setLocalSteps] = useState<ProcessStep[]>(processData.steps);
 
+  // Sync local steps when parent processData changes (e.g. after chat edits add/remove steps).
+  // Depend on the whole processData object so reference changes (new step added) always sync.
+  useEffect(() => {
+    setLocalSteps(processData.steps);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [processData]);
+
   function commitEdit(rowIndex: number, field: keyof ProcessStep, rawValue: string) {
     setEditingCell(null);
     const step = localSteps[rowIndex];
@@ -90,6 +97,13 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
   }
 
   const totalTime = localSteps.reduce((s, step) => s + step.average_time_hours, 0);
+  const totalCost = localSteps.reduce((s, step) => s + (step.cost_per_instance ?? 0), 0);
+  const stepsWithError = localSteps.filter((s) => s.error_rate_pct != null);
+  const avgErrorRate =
+    stepsWithError.length > 0
+      ? stepsWithError.reduce((s, step) => s + (step.error_rate_pct ?? 0), 0) / localSteps.length
+      : null;
+  const totalResources = localSteps.reduce((s, step) => s + step.resources_needed, 0);
 
   return (
     <div className="space-y-1">
@@ -109,7 +123,7 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
         </div>
 
         {/* Rows */}
-        <div className="divide-y divide-dark-border max-h-64 overflow-y-auto bg-dark-surface">
+        <div className="divide-y divide-dark-border max-h-56 overflow-y-auto bg-dark-surface">
           {localSteps.map((step, rowIndex) => (
             <div
               key={rowIndex}
@@ -129,6 +143,28 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
               ))}
             </div>
           ))}
+        </div>
+
+        {/* Summary row */}
+        <div
+          className="grid border-t-2 border-dark-border bg-dark-card"
+          style={{ gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr" }}
+        >
+          <div className="px-2 py-1.5 text-xs font-semibold text-ink-muted">
+            Total ({localSteps.length})
+          </div>
+          <div className="px-2 py-1.5 text-xs font-semibold text-ink tabular-nums text-right pr-3">
+            {totalTime.toFixed(1)}
+          </div>
+          <div className="px-2 py-1.5 text-xs font-semibold text-ink tabular-nums text-right pr-3">
+            {totalResources}
+          </div>
+          <div className="px-2 py-1.5 text-xs font-semibold text-ink tabular-nums text-right pr-3">
+            {avgErrorRate != null ? `${avgErrorRate.toFixed(1)}%` : "—"}
+          </div>
+          <div className="px-2 py-1.5 text-xs font-semibold text-ink tabular-nums text-right pr-3">
+            {totalCost > 0 ? `$${totalCost.toLocaleString()}` : "—"}
+          </div>
         </div>
       </div>
 

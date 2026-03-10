@@ -650,8 +650,11 @@ Non-technical users are often skeptical of AI tools. A bakery owner who built th
 ### Persistence
 
 - LangGraph SqliteSaver for conversation checkpointing
-- UUID-based user identification without login
+- UUID-based user identification without login (UUID stored in browser localStorage)
 - Session resume after browser refresh
+- Business profile and analysis history stored in SQLite, keyed by UUID
+- User-controlled data reset via settings panel (deletes DB rows + clears localStorage UUID)
+- **Planned:** automatic expiry of data inactive for 90+ days to prevent orphaned records accumulating when users lose their UUID (browser clear, device switch)
 
 ### Architecture
 

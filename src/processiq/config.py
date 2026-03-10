@@ -100,6 +100,12 @@ class Settings(BaseSettings):
         description="Max investigation turns (LLM decisions, not tool call count). ENV: AGENT_MAX_CYCLES",
     )
 
+    # ChromaDB (vector store for RAG)
+    chroma_persist_directory: str = Field(
+        default=".chroma",
+        description="ChromaDB persistent storage directory. ENV: CHROMA_PERSIST_DIRECTORY",
+    )
+
     # Application
     log_level: str = "INFO"  # DEBUG for development, INFO for demo
     confidence_threshold: float = Field(

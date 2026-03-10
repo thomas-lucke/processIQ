@@ -152,6 +152,11 @@ def initial_analysis_node(state: AgentState) -> dict[str, Any]:
     feedback = state.get("feedback_history", {})
     feedback_text = _format_feedback_history(feedback) if feedback else None
 
+    # Persistent memory context (from RAG retrieval in interface.py)
+    similar_past = state.get("similar_past_analyses") or None
+    persistent_rejections = state.get("persistent_rejections") or None
+    cross_session_patterns = state.get("cross_session_patterns") or None
+
     # Call LLM for analysis
     analysis_mode = state.get("analysis_mode")
     llm_provider = state.get("llm_provider")
@@ -165,6 +170,9 @@ def initial_analysis_node(state: AgentState) -> dict[str, Any]:
             analysis_mode=analysis_mode,
             llm_provider=llm_provider,
             feedback_history=feedback_text,
+            similar_past_analyses=similar_past,
+            persistent_rejections=persistent_rejections,
+            cross_session_patterns=cross_session_patterns,
         )
     except TimeoutError:
         insight = None
@@ -422,6 +430,9 @@ def _run_llm_analysis(
     analysis_mode: str | None = None,
     llm_provider: str | None = None,
     feedback_history: str | None = None,
+    similar_past_analyses: list[dict[str, Any]] | None = None,
+    persistent_rejections: list[tuple[str, str]] | None = None,
+    cross_session_patterns: list[str] | None = None,
 ) -> AnalysisInsight | None:
     """Run LLM-based process analysis using structured output.
 
@@ -455,6 +466,9 @@ def _run_llm_analysis(
             business_context=business_context,
             constraints_summary=constraints_summary,
             feedback_history=feedback_history,
+            similar_past_analyses=similar_past_analyses,
+            persistent_rejections=persistent_rejections,
+            cross_session_patterns=cross_session_patterns,
         )
 
         messages = [

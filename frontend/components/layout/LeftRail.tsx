@@ -4,6 +4,8 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface LeftRailProps {
+  activeNav: NavItem;
+  onNavChange: (nav: NavItem) => void;
   settingsOpen: boolean;
   onSettingsToggle: () => void;
 }
@@ -61,7 +63,7 @@ function IconMark({ size = 24 }: { size?: number }) {
   );
 }
 
-type NavItem = "analyze" | "library" | "settings";
+export type NavItem = "analyze" | "library" | "settings";
 
 interface NavButtonProps {
   icon: React.ReactNode;
@@ -99,9 +101,8 @@ function NavButton({ icon, label, active, expanded, hasIndicator, onClick }: Nav
   );
 }
 
-export function LeftRail({ settingsOpen, onSettingsToggle }: LeftRailProps) {
+export function LeftRail({ activeNav, onNavChange, settingsOpen, onSettingsToggle }: LeftRailProps) {
   const [expanded, setExpanded] = useState(false);
-  const [activeNav, setActiveNav] = useState<NavItem>("analyze");
 
   const COLLAPSED_WIDTH = 64;
   const EXPANDED_WIDTH = 260;
@@ -143,14 +144,14 @@ export function LeftRail({ settingsOpen, onSettingsToggle }: LeftRailProps) {
           label="Analyze"
           active={activeNav === "analyze"}
           expanded={expanded}
-          onClick={() => setActiveNav("analyze")}
+          onClick={() => onNavChange("analyze")}
         />
         <NavButton
           icon={<IconLibrary />}
           label="Library"
           active={activeNav === "library"}
           expanded={expanded}
-          onClick={() => setActiveNav("library")}
+          onClick={() => onNavChange("library")}
         />
 
         {/* Divider */}

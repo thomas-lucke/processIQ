@@ -1,4 +1,4 @@
-"""Memory models for ProcessIQ (Phase 2 ready)."""
+"""Memory models for ProcessIQ."""
 
 from datetime import UTC, datetime
 from enum import Enum
@@ -90,29 +90,39 @@ class BusinessProfile(BaseModel):
 
 
 class AnalysisMemory(BaseModel):
-    """Episodic memory: Past analysis experience (Collection approach).
+    """Episodic memory: Past analysis experience.
 
-    Phase 1: Not persisted (session only).
-    Phase 2: Stored in SQLite, searchable in ChromaDB.
+    Stored in SQLite (`analysis_sessions` table) and embedded in ChromaDB
+    for semantic retrieval during future analyses.
     """
 
     id: str = Field(..., description="Unique identifier for this analysis")
+    user_id: str = Field(default="", description="User who ran this analysis")
     timestamp: datetime = Field(
         default_factory=lambda: datetime.now(UTC),
         description="When analysis was performed",
     )
     process_name: str = Field(..., description="Name of the analyzed process")
+    process_description: str = Field(
+        default="",
+        description="Short summary of the process (for display in past analyses)",
+    )
+    industry: str = Field(default="", description="Industry at time of analysis")
+    step_names: list[str] = Field(
+        default_factory=list,
+        description="All step names in the process (for embedding text construction)",
+    )
     bottlenecks_found: list[str] = Field(
-        default_factory=list, description="Bottleneck step names"
+        default_factory=list, description="Issue titles identified as bottlenecks"
     )
     suggestions_offered: list[str] = Field(
-        default_factory=list, description="Suggestion IDs offered"
+        default_factory=list, description="Recommendation titles offered"
     )
     suggestions_accepted: list[str] = Field(
-        default_factory=list, description="Suggestion IDs accepted"
+        default_factory=list, description="Recommendation titles accepted"
     )
     suggestions_rejected: list[str] = Field(
-        default_factory=list, description="Suggestion IDs rejected"
+        default_factory=list, description="Recommendation titles rejected"
     )
     rejection_reasons: list[str] = Field(
         default_factory=list,
@@ -127,3 +137,16 @@ class AnalysisMemory(BaseModel):
         if total == 0:
             return 0.0
         return len(self.suggestions_accepted) / total
+
+
+class SimilarAnalysis(BaseModel):
+    """A past analysis retrieved by semantic similarity from ChromaDB."""
+
+    session_id: str
+    process_name: str
+    similarity_score: float
+    bottlenecks: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    rejected_recs: list[str] = Field(default_factory=list)
+    rejection_reasons: list[str] = Field(default_factory=list)
+    timestamp: datetime

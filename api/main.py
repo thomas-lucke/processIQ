@@ -22,17 +22,33 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from api.schemas import (
+    AnalysisSessionSummary,
     AnalyzeRequest,
     AnalyzeResponse,
     ContinueRequest,
     ContinueResponse,
     ExtractResponse,
     ExtractTextRequest,
+    FeedbackRequest,
+    FeedbackResponse,
+    ProfileResponse,
+    SessionsResponse,
 )
 from processiq.agent import interface
 from processiq.analysis.visualization import GraphSchema, build_graph_schema
 from processiq.ingestion.docling_parser import SUPPORTED_EXTENSIONS
 from processiq.logging_config import setup_logging
+from processiq.models import BusinessProfile
+from processiq.persistence.analysis_store import (
+    delete_user_sessions,
+    get_user_sessions,
+    update_session_feedback,
+)
+from processiq.persistence.profile_store import (
+    delete_profile,
+    load_profile,
+    save_profile,
+)
 
 setup_logging()
 
@@ -105,8 +121,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[_allowed_origin],
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "X-User-Id"],
 )
 
 
@@ -151,13 +167,31 @@ async def analyze(request: Request, body: AnalyzeRequest) -> AnalyzeResponse:
             "created_at": time.time(),
         }
 
+    context_sources = (
+        result.analysis_insight.context_sources if result.analysis_insight else []
+    )
+
+    # Build graph schema inline so the frontend gets it in one round-trip.
+    # Only built when we have a successful analysis with process data.
+    graph_schema = None
+    if result.process_data and not result.is_error:
+        try:
+            graph_schema = build_graph_schema(
+                process_data=result.process_data,
+                analysis_insight=result.analysis_insight,
+            )
+        except Exception:
+            logger.exception("Failed to build graph schema for /analyze response")
+
     return AnalyzeResponse(
         message=result.message,
         analysis_insight=result.analysis_insight,
+        graph_schema=graph_schema,
         thread_id=result.thread_id,
         is_error=result.is_error,
         error_code=result.error_code,
         reasoning_trace=result.reasoning_trace,
+        context_sources=context_sources,
     )
 
 
@@ -292,3 +326,91 @@ async def graph_schema(thread_id: str) -> GraphSchema:
         process_data=session["process"],
         analysis_insight=session.get("insight"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Profile endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/profile/{user_id}", response_model=ProfileResponse)
+async def get_profile(user_id: str) -> ProfileResponse:
+    logger.info("GET /profile/%s", user_id[:8])
+    profile = load_profile(user_id)
+    return ProfileResponse(profile=profile)
+
+
+@app.put("/profile/{user_id}", response_model=ProfileResponse)
+@limiter.limit("10/minute")
+async def put_profile(
+    request: Request, user_id: str, body: BusinessProfile
+) -> ProfileResponse:
+    logger.info("PUT /profile/%s", user_id[:8])
+    save_profile(user_id, body)
+    return ProfileResponse(profile=body)
+
+
+@app.delete("/profile/{user_id}", status_code=204)
+@limiter.limit("5/minute")
+async def delete_user_data(request: Request, user_id: str) -> None:
+    """Delete all stored data for a user — profile and analysis history.
+
+    Called when the user chooses to reset their data from the settings panel.
+    The frontend clears the localStorage UUID immediately after this returns.
+    """
+    logger.info("DELETE /profile/%s — resetting all user data", user_id[:8])
+    delete_user_sessions(user_id)
+    delete_profile(user_id)
+
+
+# ---------------------------------------------------------------------------
+# Sessions endpoint (Library view)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/sessions/{user_id}", response_model=SessionsResponse)
+async def get_sessions(user_id: str) -> SessionsResponse:
+    """Return all past analysis sessions for a user, newest first."""
+    logger.info("GET /sessions/%s", user_id[:8])
+    memories = get_user_sessions(user_id, limit=50)
+    summaries = [
+        AnalysisSessionSummary(
+            session_id=m.id,
+            process_name=m.process_name,
+            process_description=m.process_description,
+            industry=m.industry,
+            timestamp=m.timestamp.isoformat(),
+            step_names=m.step_names,
+            bottlenecks_found=m.bottlenecks_found,
+            suggestions_offered=m.suggestions_offered,
+            suggestions_accepted=m.suggestions_accepted,
+            suggestions_rejected=m.suggestions_rejected,
+        )
+        for m in memories
+    ]
+    return SessionsResponse(sessions=summaries)
+
+
+# ---------------------------------------------------------------------------
+# Feedback endpoint
+# ---------------------------------------------------------------------------
+
+
+@app.post("/feedback/{session_id}", response_model=FeedbackResponse)
+@limiter.limit("30/minute")
+async def post_feedback(
+    request: Request, session_id: str, body: FeedbackRequest
+) -> FeedbackResponse:
+    logger.info(
+        "POST /feedback/%s — accepted=%d, rejected=%d",
+        session_id[:8],
+        len(body.accepted),
+        len(body.rejected),
+    )
+    update_session_feedback(
+        session_id=session_id,
+        accepted=body.accepted,
+        rejected=body.rejected,
+        reasons=body.reasons,
+    )
+    return FeedbackResponse()

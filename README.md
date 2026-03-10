@@ -409,8 +409,6 @@ uv run mypy src/
 
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md) for the full plan with rationale and sequencing.
-
 **Phase 2 (active):**
 - Process visualization — interactive flowchart with severity-colored nodes and Before/After toggle (complete)
 - Frontend migration — FastAPI backend + Next.js/React Flow frontend (complete)
@@ -422,6 +420,16 @@ See [ROADMAP.md](ROADMAP.md) for the full plan with rationale and sequencing.
 - LLM response streaming
 - Comparison mode (two process versions side by side)
 - Opt-in benchmark comparison against industry data
+
+---
+
+## Data & Privacy
+
+ProcessIQ stores your business profile and analysis history in a local SQLite database to improve recommendations over time. No account is required — data is identified only by a random UUID stored in your browser's localStorage.
+
+**User control:** The settings panel includes a "Reset my data" option that permanently deletes your profile and all analysis history from the database and clears the browser UUID.
+
+**Orphaned data:** If you clear your browser data or switch devices without resetting first, your UUID is lost and the stored data becomes inaccessible (no way to re-associate it without an account system). The settings panel notifies users of this before it happens. A planned improvement is automatic expiry of data inactive for 90+ days.
 
 ---
 

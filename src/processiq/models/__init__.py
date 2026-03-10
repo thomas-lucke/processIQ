@@ -28,6 +28,7 @@ from processiq.models.memory import (
     Industry,
     RegulatoryEnvironment,
     RevenueRange,
+    SimilarAnalysis,
 )
 from processiq.models.process import ProcessData, ProcessStep
 
@@ -61,6 +62,7 @@ __all__ = [
     "RegulatoryEnvironment",
     "RevenueRange",
     "SeverityLevel",
+    "SimilarAnalysis",
     "Suggestion",
     "SuggestionType",
 ]

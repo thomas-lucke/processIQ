@@ -39,6 +39,7 @@ from processiq.ingestion import (
 )
 from processiq.models import (
     AnalysisInsight,
+    AnalysisMemory,
     BusinessProfile,
     CompanySize,
     Constraints,
@@ -46,6 +47,13 @@ from processiq.models import (
     ProcessData,
 )
 from processiq.persistence import get_checkpointer, get_thread_id
+from processiq.persistence.analysis_store import (
+    detect_patterns,
+    get_recent_rejections,
+    save_session,
+)
+from processiq.persistence.profile_store import load_profile, save_profile
+from processiq.persistence.vector_store import embed_analysis, find_similar_analyses
 
 logger = logging.getLogger(__name__)
 
@@ -347,7 +355,54 @@ def analyze_process(
         # Calculate confidence before analysis
         confidence = calculate_confidence(process, constraints, profile)
 
-        # Create initial state
+        # --- Persistent memory: retrieve context before analysis ---
+        similar_past: list[dict[str, Any]] = []
+        persistent_rejections: list[tuple[str, str]] = []
+        cross_session_patterns: list[str] = []
+        is_first_time_user = False
+
+        if user_id:
+            # Check if this is a first-time user before merging profile
+            is_first_time_user = load_profile(user_id) is None
+            # Merge saved profile with request profile (saved fields as defaults)
+            profile = _merge_profile(user_id, profile)
+
+            # Retrieve similar past analyses from ChromaDB
+            similar_analyses = find_similar_analyses(
+                process_data=process,
+                profile=profile,
+                user_id=user_id,
+            )
+            if similar_analyses:
+                similar_past = [
+                    {
+                        "process_name": sa.process_name,
+                        "timestamp": sa.timestamp.strftime("%Y-%m-%d"),
+                        "bottlenecks": sa.bottlenecks,
+                        "recommendations": sa.recommendations,
+                        "rejected_recs": sa.rejected_recs,
+                    }
+                    for sa in similar_analyses
+                ]
+                logger.info(
+                    "Retrieved %d similar past analyses for context", len(similar_past)
+                )
+
+            # Get persistent rejections across sessions
+            persistent_rejections = get_recent_rejections(user_id, limit=20)
+            if persistent_rejections:
+                logger.info(
+                    "Loaded %d persistent rejections", len(persistent_rejections)
+                )
+
+            # Detect cross-session patterns
+            cross_session_patterns = detect_patterns(user_id)
+            if cross_session_patterns:
+                logger.info(
+                    "Detected %d cross-session patterns", len(cross_session_patterns)
+                )
+
+        # Create initial state (with memory context)
         state = create_initial_state(
             process=process,
             constraints=constraints,
@@ -356,6 +411,9 @@ def analyze_process(
             llm_provider=llm_provider,
             feedback_history=feedback_history,
             max_cycles_override=max_cycles_override,
+            similar_past_analyses=similar_past,
+            persistent_rejections=persistent_rejections,
+            cross_session_patterns=cross_session_patterns,
         )
 
         # Get checkpointer for persistence (if enabled)
@@ -402,13 +460,38 @@ def analyze_process(
 
         # Check for LLM-based insight
         if analysis_insight:
+            # --- Source attribution: mark which past analyses informed this one ---
+            if similar_past:
+                analysis_insight.context_sources = [
+                    f"Past analysis: '{sa['process_name']}' ({sa['timestamp']})"
+                    for sa in similar_past
+                ]
+
             logger.info(
                 "LLM analysis complete: %d issues, %d recommendations",
                 len(analysis_insight.issues),
                 len(analysis_insight.recommendations),
             )
+
+            # --- Persist analysis session and embed in ChromaDB ---
+            if user_id:
+                _persist_analysis(
+                    user_id=user_id,
+                    process=process,
+                    profile=profile,
+                    insight=analysis_insight,
+                    thread_id=thread_id,
+                )
+
+            summary = _generate_insight_summary(analysis_insight)
+            if is_first_time_user and not similar_past:
+                summary += (
+                    "\n\n*This is your first analysis. As you analyze more processes, "
+                    "ProcessIQ will learn your preferences and give more calibrated "
+                    "recommendations.*"
+                )
             return AgentResponse(
-                message=_generate_insight_summary(analysis_insight),
+                message=summary,
                 process_data=process,
                 analysis_insight=analysis_insight,
                 confidence=confidence,
@@ -1205,6 +1288,64 @@ def _extract_step_name_from_gap(gap: str) -> str | None:
     """Extract step name from a data gap string like \"cost for 'Manager Review'\"."""
     match = re.search(r"for ['\"](.+?)['\"]", gap)
     return match.group(1) if match else None
+
+
+def _merge_profile(
+    user_id: str, request_profile: BusinessProfile | None
+) -> BusinessProfile:
+    """Merge a saved profile with the request profile.
+
+    Saved fields act as defaults — anything explicitly set in the request wins.
+    This lets the user override their profile per-request without losing saved data.
+    """
+    saved = load_profile(user_id)
+    if saved is None:
+        return request_profile or BusinessProfile()
+    if request_profile is None:
+        return saved
+
+    # Request fields override saved fields when explicitly set
+    merged_data = saved.model_dump()
+    request_data = request_profile.model_dump(exclude_defaults=True)
+    merged_data.update(request_data)
+    return BusinessProfile(**merged_data)
+
+
+def _persist_analysis(
+    user_id: str,
+    process: ProcessData,
+    profile: BusinessProfile | None,
+    insight: AnalysisInsight,
+    thread_id: str,
+) -> None:
+    """Save analysis session to SQLite and embed in ChromaDB.
+
+    Called after a successful analysis. Never raises — persistence is best-effort.
+    """
+    try:
+        memory = AnalysisMemory(
+            id=thread_id,
+            user_id=user_id,
+            process_name=process.name,
+            process_description=process.description or "",
+            industry=profile.industry.value if profile and profile.industry else "",
+            step_names=[s.step_name for s in process.steps],
+            bottlenecks_found=[i.title for i in insight.issues],
+            suggestions_offered=[r.title for r in insight.recommendations],
+        )
+
+        save_session(user_id=user_id, memory=memory)
+        embed_analysis(memory=memory, profile=profile)
+
+        # Auto-update saved profile with current settings
+        if profile:
+            save_profile(user_id, profile)
+
+        logger.info(
+            "Persisted analysis session %s for user %s", thread_id[:8], user_id[:8]
+        )
+    except Exception:
+        logger.warning("Failed to persist analysis session", exc_info=True)
 
 
 def _generate_extraction_guidance(user_message: str) -> str:

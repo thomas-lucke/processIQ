@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { BusinessProfile, Constraints, Industry, CompanySize, RegulatoryEnvironment } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +15,8 @@ interface SettingsDrawerProps {
   onAnalysisModeChange: (mode: string) => void;
   onLlmProviderChange: (p: "anthropic" | "openai" | "ollama") => void;
   onMaxCyclesChange: (n: number) => void;
+  onNewAnalysis: () => void;
+  onDeleteData: () => Promise<void>;
 }
 
 const INDUSTRIES: { value: Industry; label: string }[] = [
@@ -113,7 +116,25 @@ export function SettingsDrawer({
   onAnalysisModeChange,
   onLlmProviderChange,
   onMaxCyclesChange,
+  onNewAnalysis,
+  onDeleteData,
 }: SettingsDrawerProps) {
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleConfirmDelete() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await onDeleteData();
+      window.location.reload();
+    } catch {
+      setDeleteError("Something went wrong. Please try again.");
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="space-y-3 text-sm">
 
@@ -236,7 +257,24 @@ export function SettingsDrawer({
       </div>
 
       <div className="space-y-1">
-        <label className="text-xs text-ink-muted font-medium">Regulatory environment</label>
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-ink-muted font-medium">Regulatory environment</label>
+          <span
+            className="relative group cursor-default"
+            aria-label="About regulatory environment"
+          >
+            <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-ink-faint text-ink-faint text-[9px] font-bold leading-none select-none">?</span>
+            <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 bottom-full mb-1.5 w-56 rounded-lg bg-dark-surface border border-dark-border px-3 py-2 text-xs text-ink-muted shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 z-50">
+              How heavily regulated your industry is. This affects whether recommendations can include process changes that require compliance sign-off, audit trails, or data handling procedures.
+              <span className="block mt-1 space-y-0.5">
+                <span className="block"><span className="text-ink font-medium">Minimal</span> — few or no formal compliance requirements</span>
+                <span className="block"><span className="text-ink font-medium">Moderate</span> — standard business regulations (contracts, GDPR, etc.)</span>
+                <span className="block"><span className="text-ink font-medium">Strict</span> — regulated industry (finance, legal, insurance)</span>
+                <span className="block"><span className="text-ink font-medium">Highly regulated</span> — healthcare, pharmaceuticals, government</span>
+              </span>
+            </span>
+          </span>
+        </div>
         <select
           value={profile.regulatory_environment ?? "moderate"}
           onChange={(e) => onProfileChange({ ...profile, regulatory_environment: e.target.value as RegulatoryEnvironment })}
@@ -276,6 +314,65 @@ export function SettingsDrawer({
       </div>
 
       <p className="text-xs text-ink-faint italic pt-2">Settings apply to the next analysis run.</p>
+
+      {/* New Analysis */}
+      <SectionHeader title="Session" />
+      <button
+        onClick={onNewAnalysis}
+        className="w-full text-xs font-medium text-ink border border-dark-border rounded-lg px-3 py-2 hover:bg-dark-hover transition-colors text-left"
+      >
+        New analysis
+      </button>
+      <p className="text-xs text-ink-faint">Clears the current chat and results. Your settings are kept.</p>
+
+      {/* Your Data */}
+      <SectionHeader title="Your data" />
+      <p className="text-xs text-ink-muted leading-relaxed">
+        ProcessIQ remembers your business profile and past analyses so recommendations improve over time. No account required — your data is stored on this server and tied to this browser only. If you clear your browser data or switch to a different device, your history becomes inaccessible. Use the button below to safely delete data before switching devices.
+      </p>
+      <div className="mt-3 pt-3 border-t border-red-900/40 space-y-2">
+        <p className="text-xs font-semibold text-red-400 uppercase tracking-wide">Danger zone</p>
+        <button
+          onClick={() => setShowConfirm(true)}
+          className="w-full text-xs font-medium text-red-400 border border-red-900/50 rounded-lg px-3 py-2 hover:bg-red-950/30 transition-colors text-left"
+        >
+          Reset my data
+        </button>
+        <p className="text-xs text-ink-faint">Permanently deletes your business profile and all saved analyses.</p>
+      </div>
+
+      {/* Confirmation modal */}
+      {showConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-dark-surface border border-dark-border rounded-xl p-6 max-w-sm w-full mx-4 space-y-4 shadow-xl">
+            <h2 className="text-sm font-semibold text-ink">Reset all your data?</h2>
+            <p className="text-xs text-ink-muted leading-relaxed">
+              This will permanently delete your business profile and all saved analyses. ProcessIQ will start fresh, as if you are a new user.
+            </p>
+            <p className="text-xs font-medium text-red-400">This cannot be undone.</p>
+            {deleteError && (
+              <p className="text-xs text-red-400">{deleteError}</p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => { setShowConfirm(false); setDeleteError(null); }}
+                disabled={deleting}
+                autoFocus
+                className="flex-1 text-xs font-medium border border-dark-border rounded-lg px-3 py-2 text-ink hover:bg-dark-border/40 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+                className="flex-1 text-xs font-medium bg-red-950/60 border border-red-900/60 rounded-lg px-3 py-2 text-red-400 hover:bg-red-900/40 transition-colors disabled:opacity-50"
+              >
+                {deleting ? "Deleting..." : "Yes, delete everything"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

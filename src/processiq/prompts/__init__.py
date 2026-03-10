@@ -172,6 +172,9 @@ def get_analysis_prompt(
     constraints_summary: str | None = None,
     user_concerns: str | None = None,
     feedback_history: str | None = None,
+    similar_past_analyses: list[Any] | None = None,
+    persistent_rejections: list[Any] | None = None,
+    cross_session_patterns: list[str] | None = None,
 ) -> str:
     """Get prompt for LLM-based process analysis.
 
@@ -184,6 +187,9 @@ def get_analysis_prompt(
         constraints_summary: Optional summary of active constraints.
         user_concerns: Optional user-stated concerns to address.
         feedback_history: Optional formatted feedback from previous recommendations.
+        similar_past_analyses: Optional list of similar past analyses from ChromaDB.
+        persistent_rejections: Optional list of (title, reason) tuples from past sessions.
+        cross_session_patterns: Optional list of detected cross-session patterns.
 
     Returns:
         Rendered prompt string for process analysis.
@@ -195,6 +201,9 @@ def get_analysis_prompt(
         constraints_summary=constraints_summary,
         user_concerns=user_concerns,
         feedback_history=feedback_history,
+        similar_past_analyses=similar_past_analyses,
+        persistent_rejections=persistent_rejections,
+        cross_session_patterns=cross_session_patterns,
     )
 
 

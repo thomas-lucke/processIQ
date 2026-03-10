@@ -32,6 +32,44 @@ The user has already reviewed previous recommendations and provided feedback.
 {{ feedback_history }}
 {% endif %}
 
+{% if similar_past_analyses %}
+## Context from Past Analyses
+
+The user has analyzed similar processes before. Use this context to give
+more calibrated recommendations -- but don't just repeat past advice.
+
+{% for analysis in similar_past_analyses %}
+- **{{ analysis.process_name }}** ({{ analysis.timestamp }}):
+  Bottlenecks: {{ analysis.bottlenecks | join(', ') }}
+  Recommendations given: {{ analysis.recommendations | join(', ') }}
+  {% if analysis.rejected_recs %}Rejected: {{ analysis.rejected_recs | join(', ') }}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if persistent_rejections %}
+## Previously Rejected Approaches
+
+The user has rejected these approaches in past sessions. Do NOT re-suggest
+them unless you have a compelling reason that addresses their original concern.
+
+{% for title, reason in persistent_rejections %}
+- "{{ title }}" -- rejected because: {{ reason }}
+{% endfor %}
+{% endif %}
+
+{% if cross_session_patterns %}
+## Cross-Session Patterns
+
+These patterns have been detected across multiple analyses for this user:
+
+{% for pattern in cross_session_patterns %}
+- {{ pattern }}
+{% endfor %}
+
+Consider whether these patterns indicate systemic organizational issues
+rather than process-specific problems.
+{% endif %}
+
 ---
 
 ## Your Analysis Task

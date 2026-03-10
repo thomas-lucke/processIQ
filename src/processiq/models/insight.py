@@ -173,11 +173,18 @@ class AnalysisInsight(BaseModel):
         description="Caveats about the analysis (e.g., 'Limited by missing error rates')",
     )
 
-    # Agentic investigation findings (Phase 2)
+    # Agentic investigation findings
     investigation_findings: list[str] = Field(
         default_factory=list,
         description="Findings from the agentic investigation loop. "
         "Populated after initial analysis by tool calls — not filled by the initial LLM pass.",
+    )
+
+    # Source attribution (persistent memory / RAG)
+    context_sources: list[str] = Field(
+        default_factory=list,
+        description="Citations of past analyses that informed this analysis. "
+        "Populated by the pipeline, not the LLM.",
     )
 
     # Raw thinking (optional, for debugging)

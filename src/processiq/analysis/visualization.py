@@ -43,9 +43,6 @@ class GraphSchema(BaseModel):
     edges: list[GraphEdge]
 
 
-_GRID_COLS = 3  # columns in the grid layout for linear processes
-
-
 def compute_layered_layout(
     steps: list[str],
     dependencies: dict[str, list[str]],  # step_name -> list of predecessor step names
@@ -53,13 +50,9 @@ def compute_layered_layout(
     """Assign (x, y) coordinates.
 
     Layout strategy:
-    - Linear processes (every topological level has exactly 1 node): grid layout.
-      Steps fill left→right across _GRID_COLS columns, rows flow top→bottom.
-      x = column index, y = row index (renderer negates y so row 0 is at top).
+    - Linear processes (every topological level has exactly 1 node): horizontal chain.
+      All steps on y=0, x=0,1,2,...  The renderer spaces them left→right.
     - Branching/parallel processes: Sugiyama column layout (x = level, y = rank).
-
-    The grid layout keeps a 13-step linear process to 5 rows x 3 cols instead
-    of 13 columns — fits in a single view without scrolling.
     """
     if not steps:
         return {}
@@ -87,8 +80,10 @@ def compute_layered_layout(
             queue.append(step)
 
     if not queue:
-        logger.warning("visualization: cycle detected, falling back to grid layout")
-        return _grid_positions(steps)
+        logger.warning(
+            "visualization: cycle detected, falling back to horizontal layout"
+        )
+        return _horizontal_positions(steps)
 
     processed_count = 0
     while queue:
@@ -102,10 +97,10 @@ def compute_layered_layout(
 
     if processed_count < len(steps):
         logger.warning(
-            "visualization: %d steps unreachable in topological sort, using grid layout",
+            "visualization: %d steps unreachable in topological sort, using horizontal layout",
             len(steps) - processed_count,
         )
-        return _grid_positions(steps)
+        return _horizontal_positions(steps)
 
     levels: dict[int, list[str]] = defaultdict(list)
     for step in steps:
@@ -117,9 +112,9 @@ def compute_layered_layout(
 
     max_level_width = max(len(v) for v in levels.values())
     if max_level_width == 1:
-        # Strictly linear — use grid layout
+        # Strictly linear — horizontal chain
         ordered_steps = [levels[lv][0] for lv in sorted(levels)]
-        return _grid_positions(ordered_steps)
+        return _horizontal_positions(ordered_steps)
 
     # Branching/parallel — standard Sugiyama column layout (x=level, y=rank)
     positions: dict[str, tuple[float, float]] = {}
@@ -132,23 +127,13 @@ def compute_layered_layout(
     return positions
 
 
-def _grid_positions(steps: list[str]) -> dict[str, tuple[float, float]]:
-    """Arrange steps in a top→bottom, left→right grid of _GRID_COLS columns.
+def _horizontal_positions(steps: list[str]) -> dict[str, tuple[float, float]]:
+    """Arrange steps in a single horizontal chain.
 
-    x = column index (0 to _GRID_COLS-1), y = row index (0, 1, 2, ...).
-    The renderer multiplies by spacing constants and negates y so row 0 renders
-    at the top of the figure.
-
-    For 13 steps with _GRID_COLS=3:
-      row 0: steps 0,1,2   row 1: steps 3,4,5   row 2: steps 6,7,8
-      row 3: steps 9,10,11  row 4: step 12
+    x = step index (0, 1, 2, ...), y = 0 for all.
+    The renderer spaces nodes left→right with COL_SPACING pixels per unit.
     """
-    positions: dict[str, tuple[float, float]] = {}
-    for i, step in enumerate(steps):
-        row = i // _GRID_COLS
-        col = i % _GRID_COLS
-        positions[step] = (float(col), float(row))
-    return positions
+    return {step: (float(i), 0.0) for i, step in enumerate(steps)}
 
 
 def _matches_step(step_name: str, candidate: str) -> bool:

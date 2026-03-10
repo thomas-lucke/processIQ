@@ -3,7 +3,8 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { AnalysisInsight, GraphSchema, Issue, Recommendation } from "@/lib/types";
+import type { AnalysisInsight, GraphSchema, Issue, ProcessData, Recommendation } from "@/lib/types";
+import { submitFeedback } from "@/lib/api";
 
 const ProcessGraph = dynamic(
   () => import("@/components/visualization/ProcessGraph").then((m) => m.ProcessGraph),
@@ -14,7 +15,7 @@ const ProcessGraph = dynamic(
 // Tab types
 // ---------------------------------------------------------------------------
 
-type TabId = "overview" | "issues" | "recommendations" | "flow" | "scenarios";
+type TabId = "overview" | "issues" | "recommendations" | "flow" | "scenarios" | "data";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -22,6 +23,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: "recommendations", label: "Recommendations" },
   { id: "flow", label: "Flow" },
   { id: "scenarios", label: "Scenarios" },
+  { id: "data", label: "Data" },
 ];
 
 // ---------------------------------------------------------------------------
@@ -211,6 +213,21 @@ function OverviewTab({
           </div>
         </div>
       )}
+
+      {/* Context used — shown when past analyses informed this one */}
+      {insight.context_sources && insight.context_sources.length > 0 && (
+        <div className="space-y-1.5">
+          <h3 className="text-xs font-semibold text-ink-muted uppercase tracking-wider">Context used</h3>
+          <div className="bg-dark-card border border-dark-border rounded-lg px-3 py-2.5 space-y-1">
+            {insight.context_sources.map((source, i) => (
+              <p key={i} className="text-xs text-ink-muted flex items-start gap-1.5">
+                <span className="mt-0.5 text-accent flex-shrink-0">↗</span>
+                {source}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -307,41 +324,60 @@ function IssueGroup({ label, issues }: { label: string; issues: Issue[] }) {
 // Recommendations tab
 // ---------------------------------------------------------------------------
 
-type RecAction = "accepted" | "dismissed" | null;
+type RecRating = "helpful" | "not_helpful" | null;
+
+const NOT_HELPFUL_REASONS = [
+  "Not feasible for us",
+  "Already tried this",
+  "Outside our budget",
+  "Doesn't apply to our situation",
+];
+
+interface RecState {
+  rating: RecRating;
+  hidden: boolean;
+  showReasonPicker: boolean;
+  freeText: string;
+  reasonSubmitted: boolean;
+}
 
 function RecommendationCard({
   rec,
   index,
+  state,
+  onRate,
+  onToggleHidden,
+  onSubmitReason,
   onHighlightSteps,
 }: {
   rec: Recommendation;
   index: number;
+  state: RecState;
+  onRate: (rating: RecRating) => void;
+  onToggleHidden: () => void;
+  onSubmitReason: (reason: string) => void;
   onHighlightSteps?: (steps: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(index === 0);
   const [showReasoning, setShowReasoning] = useState(false);
-  const [action, setAction] = useState<RecAction>(null);
+  const [freeText, setFreeText] = useState("");
 
-  if (action === "dismissed") {
+  if (state.hidden) {
     return (
       <div className="bg-dark-card border border-dark-border rounded-xl px-4 py-3 flex items-center justify-between text-xs text-ink-faint">
-        <span className="italic">{rec.title} — dismissed</span>
-        <button onClick={() => setAction(null)} className="text-accent hover:text-accent/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Restore</button>
-      </div>
-    );
-  }
-
-  if (action === "accepted") {
-    return (
-      <div className="bg-emerald-950/30 border border-emerald-800/50 rounded-xl px-4 py-3 flex items-center justify-between text-xs text-emerald-400 border-l-2 border-l-emerald-500">
-        <span className="font-medium">✓ {rec.title} — added to improvement plan</span>
-        <button onClick={() => setAction(null)} className="text-ink-faint hover:text-ink-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Undo</button>
+        <span className="italic">{rec.title} — hidden</span>
+        <button onClick={onToggleHidden} className="text-accent hover:text-accent/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">Show</button>
       </div>
     );
   }
 
   return (
-    <div className="bg-dark-card border border-dark-border rounded-xl px-4 py-4 space-y-2.5">
+    <div className={cn(
+      "bg-dark-card border rounded-xl px-4 py-4 space-y-2.5 transition-colors",
+      state.rating === "helpful" && "border-emerald-800/60",
+      state.rating === "not_helpful" && "border-dark-border opacity-75",
+      state.rating === null && "border-dark-border",
+    )}>
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
           <span className="text-xs font-bold text-ink-faint mt-0.5 w-6 flex-shrink-0">
@@ -432,39 +468,135 @@ function RecommendationCard({
         </div>
       )}
 
+      {/* Rating + hide row */}
       <div className="ml-8 flex items-center gap-2 pt-1">
+        <span className="text-xs text-ink-faint mr-1">Was this helpful?</span>
         <button
-          onClick={() => setAction("accepted")}
-          className="text-xs px-4 py-1.5 rounded-lg bg-accent text-dark-bg hover:bg-accent/90 hover:shadow-btn-accent transition-all duration-100 font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          onClick={() => onRate(state.rating === "helpful" ? null : "helpful")}
+          className={cn(
+            "text-xs px-3 py-1.5 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
+            state.rating === "helpful"
+              ? "bg-emerald-950 border-emerald-700 text-emerald-400 font-semibold"
+              : "border-dark-border text-ink-muted hover:bg-dark-hover",
+          )}
         >
-          Accept
+          Helpful
         </button>
         <button
-          onClick={() => setAction("dismissed")}
-          className="text-xs px-4 py-1.5 rounded-lg border border-dark-border text-ink-muted hover:bg-dark-hover transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          onClick={() => onRate(state.rating === "not_helpful" ? null : "not_helpful")}
+          className={cn(
+            "text-xs px-3 py-1.5 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
+            state.rating === "not_helpful"
+              ? "bg-red-950 border-red-800 text-red-400 font-semibold"
+              : "border-dark-border text-ink-muted hover:bg-dark-hover",
+          )}
         >
-          Dismiss
+          Not helpful
+        </button>
+        <button
+          onClick={onToggleHidden}
+          className="ml-auto text-xs text-ink-faint hover:text-ink-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+          title="Hide this recommendation"
+        >
+          Hide
         </button>
       </div>
+
+      {/* Reason picker — shown when "Not helpful" is selected and reason not yet submitted */}
+      {state.rating === "not_helpful" && !state.reasonSubmitted && (
+        <div className="ml-8 rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-3 space-y-2">
+          <p className="text-xs font-medium text-ink-muted">Help us improve — why wasn&apos;t this helpful?</p>
+          <div className="flex flex-wrap gap-1.5">
+            {NOT_HELPFUL_REASONS.map((reason) => (
+              <button
+                key={reason}
+                onClick={() => onSubmitReason(reason)}
+                className="text-xs px-2.5 py-1 rounded-full border border-dark-border text-ink-muted hover:bg-dark-hover hover:text-ink transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                {reason}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={freeText}
+              onChange={(e) => setFreeText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && freeText.trim()) { onSubmitReason(freeText.trim()); setFreeText(""); } }}
+              placeholder="Or describe the issue..."
+              className="flex-1 text-xs bg-dark-bg border border-dark-border rounded-lg px-2.5 py-1.5 text-ink placeholder:text-ink-faint focus:outline-none focus:border-accent"
+            />
+            <button
+              onClick={() => { if (freeText.trim()) { onSubmitReason(freeText.trim()); setFreeText(""); } }}
+              disabled={!freeText.trim()}
+              className="text-xs px-3 py-1.5 rounded-lg bg-accent text-dark-bg font-semibold disabled:opacity-40 hover:bg-accent/90 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      )}
+
+      {state.rating === "not_helpful" && state.reasonSubmitted && (
+        <p className="ml-8 text-xs text-ink-faint italic">Feedback recorded. Thank you.</p>
+      )}
     </div>
   );
 }
 
 function RecommendationsTab({
   insight,
+  sessionId,
   onHighlightSteps,
 }: {
   insight: AnalysisInsight;
+  sessionId?: string | null;
   onHighlightSteps: (steps: string[]) => void;
 }) {
   const recs = insight.recommendations ?? [];
+  const [states, setStates] = useState<RecState[]>(() =>
+    recs.map(() => ({ rating: null, hidden: false, showReasonPicker: false, freeText: "", reasonSubmitted: false }))
+  );
+
+  function setRecState(i: number, patch: Partial<RecState>) {
+    setStates((prev) => prev.map((s, idx) => idx === i ? { ...s, ...patch } : s));
+  }
+
+  function handleRate(i: number, rating: RecRating) {
+    setRecState(i, { rating, reasonSubmitted: false });
+    if (!sessionId) return;
+    const rec = recs[i];
+    if (rating === "helpful") {
+      submitFeedback(sessionId, { accepted: [rec.title], rejected: [], reasons: [] }).catch(() => {});
+    } else if (rating === "not_helpful") {
+      submitFeedback(sessionId, { accepted: [], rejected: [rec.title], reasons: [] }).catch(() => {});
+    }
+  }
+
+  function handleSubmitReason(i: number, reason: string) {
+    setRecState(i, { reasonSubmitted: true });
+    if (!sessionId) return;
+    const rec = recs[i];
+    submitFeedback(sessionId, { accepted: [], rejected: [rec.title], reasons: [reason] }).catch(() => {});
+  }
+
   if (recs.length === 0) {
     return <p className="text-sm text-ink-muted py-4">No recommendations generated.</p>;
   }
+
   return (
     <div className="space-y-3">
       {recs.map((rec, i) => (
-        <RecommendationCard key={i} rec={rec} index={i} onHighlightSteps={onHighlightSteps} />
+        <RecommendationCard
+          key={i}
+          rec={rec}
+          index={i}
+          state={states[i]}
+          onRate={(rating) => handleRate(i, rating)}
+          onToggleHidden={() => setRecState(i, { hidden: !states[i].hidden })}
+          onSubmitReason={(reason) => handleSubmitReason(i, reason)}
+          onHighlightSteps={onHighlightSteps}
+        />
       ))}
     </div>
   );
@@ -606,13 +738,106 @@ function ScenarioKpi({
 }
 
 // ---------------------------------------------------------------------------
+// Data tab
+// ---------------------------------------------------------------------------
+
+function DataTab({ processData }: { processData?: ProcessData | null }) {
+  if (!processData || processData.steps.length === 0) {
+    return <p className="text-sm text-ink-muted py-4">No process data available.</p>;
+  }
+
+  const steps = processData.steps;
+
+  const totalTime = steps.reduce((s, step) => s + step.average_time_hours, 0);
+  const totalCost = steps.reduce((s, step) => s + (step.cost_per_instance ?? 0), 0);
+  const stepsWithError = steps.filter((s) => s.error_rate_pct != null);
+  const avgErrorRate =
+    stepsWithError.length > 0
+      ? stepsWithError.reduce((s, step) => s + (step.error_rate_pct ?? 0), 0) / steps.length
+      : null;
+  const totalResources = steps.reduce((s, step) => s + step.resources_needed, 0);
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-ink-faint">
+        Process: <span className="text-ink font-medium">{processData.name}</span>
+        {processData.description && (
+          <span className="ml-2 text-ink-faint">— {processData.description}</span>
+        )}
+      </p>
+      <div className="overflow-x-auto rounded-xl border border-dark-border">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-dark-border bg-dark-card">
+              <th className="text-left px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide">Step</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Time (h)</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide">Resources</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Error %</th>
+              <th className="text-right px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide whitespace-nowrap">Cost ($)</th>
+              <th className="text-left px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide">Depends on</th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((step, i) => (
+              <tr key={i} className={cn("border-b border-dark-border", i % 2 === 0 ? "bg-dark-bg" : "bg-dark-card/40")}>
+                <td className="px-3 py-2 font-medium text-ink">{step.step_name}</td>
+                <td className="px-3 py-2 text-right text-ink-muted tabular-nums">{step.average_time_hours}</td>
+                <td className="px-3 py-2 text-right text-ink-muted tabular-nums">{step.resources_needed}</td>
+                <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
+                  {step.error_rate_pct != null ? `${step.error_rate_pct}%` : "—"}
+                </td>
+                <td className="px-3 py-2 text-right text-ink-muted tabular-nums">
+                  {step.cost_per_instance != null ? step.cost_per_instance : "—"}
+                </td>
+                <td className="px-3 py-2 text-ink-faint">
+                  {step.depends_on && step.depends_on.length > 0
+                    ? step.depends_on.join(", ")
+                    : "—"}
+                </td>
+              </tr>
+            ))}
+            {/* Summary row */}
+            <tr className="border-t-2 border-dark-border bg-dark-card">
+              <td className="px-3 py-2 font-semibold text-ink-muted uppercase tracking-wide text-xs">
+                Total ({steps.length} steps)
+              </td>
+              <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                {totalTime.toFixed(1)}
+              </td>
+              <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                {totalResources}
+              </td>
+              <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                {avgErrorRate != null ? `${avgErrorRate.toFixed(1)}%` : "—"}
+              </td>
+              <td className="px-3 py-2 text-right font-semibold text-ink tabular-nums">
+                {totalCost > 0 ? `$${totalCost.toLocaleString()}` : "—"}
+              </td>
+              <td className="px-3 py-2 text-ink-faint">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="text-xs text-ink-faint italic">
+        {steps.some((s) => s.estimated_fields && s.estimated_fields.length > 0) && (
+          <span>Fields marked as estimated were inferred from context. </span>
+        )}
+        Avg error % = sum of error rates / total steps.
+      </p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
 interface ProcessIntelligencePanelProps {
   insight: AnalysisInsight;
   graphSchema?: GraphSchema | null;
+  processData?: ProcessData | null;
   runLabel?: string | null;
+  sessionId?: string | null;
   highlightedSteps: string[];
   onHighlightSteps: (steps: string[]) => void;
 }
@@ -620,7 +845,9 @@ interface ProcessIntelligencePanelProps {
 export function ProcessIntelligencePanel({
   insight,
   graphSchema,
+  processData,
   runLabel,
+  sessionId,
   highlightedSteps,
   onHighlightSteps,
 }: ProcessIntelligencePanelProps) {
@@ -678,12 +905,13 @@ export function ProcessIntelligencePanel({
         )}
         {activeTab === "issues" && <IssuesTab insight={insight} />}
         {activeTab === "recommendations" && (
-          <RecommendationsTab insight={insight} onHighlightSteps={onHighlightSteps} />
+          <RecommendationsTab insight={insight} sessionId={sessionId} onHighlightSteps={onHighlightSteps} />
         )}
         {activeTab === "flow" && (
           <FlowTab graphSchema={graphSchema} highlightedSteps={highlightedSteps} />
         )}
         {activeTab === "scenarios" && <ScenariosTab insight={insight} />}
+        {activeTab === "data" && <DataTab processData={processData} />}
       </div>
     </div>
   );

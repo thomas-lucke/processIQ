@@ -6,6 +6,7 @@ pattern detection and the persistent rejection loop.
 
 import json
 import logging
+import sqlite3
 from collections import Counter
 
 from processiq.models.memory import AnalysisMemory
@@ -40,6 +41,14 @@ def _ensure_schema() -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_sessions_user ON analysis_sessions(user_id)"
     )
+    # Migration: add recommendations_json column if it doesn't exist yet
+    try:
+        conn.execute(
+            "ALTER TABLE analysis_sessions ADD COLUMN recommendations_json TEXT DEFAULT '[]'"
+        )
+        logger.info("Migrated analysis_sessions: added recommendations_json column")
+    except sqlite3.OperationalError:
+        pass  # Column already exists
     conn.commit()
     _SCHEMA_INITIALIZED = True
 
@@ -53,8 +62,8 @@ def save_session(user_id: str, memory: AnalysisMemory) -> None:
         INSERT OR REPLACE INTO analysis_sessions
             (session_id, user_id, process_name, process_description, industry,
              timestamp, step_names, bottlenecks, recommendations,
-             accepted_recs, rejected_recs, rejection_reasons)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             accepted_recs, rejected_recs, rejection_reasons, recommendations_json)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             memory.id,
@@ -69,6 +78,7 @@ def save_session(user_id: str, memory: AnalysisMemory) -> None:
             json.dumps(memory.suggestions_accepted),
             json.dumps(memory.suggestions_rejected),
             json.dumps(memory.rejection_reasons),
+            json.dumps(memory.recommendations_full),
         ),
     )
     conn.commit()
@@ -145,6 +155,7 @@ def get_user_sessions(user_id: str, limit: int = 20) -> list[AnalysisMemory]:
             suggestions_accepted=json.loads(row["accepted_recs"]),
             suggestions_rejected=json.loads(row["rejected_recs"]),
             rejection_reasons=json.loads(row["rejection_reasons"]),
+            recommendations_full=json.loads(row["recommendations_json"] or "[]"),
         )
         for row in rows
     ]

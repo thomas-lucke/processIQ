@@ -20,6 +20,7 @@ from processiq.models.insight import (
     Issue,
     NotAProblem,
     Recommendation,
+    RuledOutOption,
 )
 from processiq.models.memory import (
     AnalysisMemory,
@@ -60,6 +61,7 @@ __all__ = [
     "ROIEstimate",
     "Recommendation",
     "RegulatoryEnvironment",
+    "RuledOutOption",
     "RevenueRange",
     "SeverityLevel",
     "SimilarAnalysis",

@@ -119,6 +119,19 @@ class ExtractResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class RecommendationSummary(BaseModel):
+    """Lean recommendation record for the Analysis Library.
+
+    Stores the most useful fields for the Library view without the full
+    Recommendation model (which includes verbose arrays).
+    """
+
+    title: str
+    description: str
+    expected_benefit: str
+    estimated_roi: str = ""
+
+
 class AnalysisSessionSummary(BaseModel):
     """Read-only summary of a past analysis session for the Library view."""
 
@@ -132,6 +145,7 @@ class AnalysisSessionSummary(BaseModel):
     suggestions_offered: list[str]
     suggestions_accepted: list[str]
     suggestions_rejected: list[str]
+    recommendations_full: list[RecommendationSummary] = Field(default_factory=list)
 
 
 class SessionsResponse(BaseModel):

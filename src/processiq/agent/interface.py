@@ -373,16 +373,33 @@ def analyze_process(
                 profile=profile,
                 user_id=user_id,
             )
-            if similar_analyses:
+            # Only inject past analyses above similarity threshold — below 0.4
+            # the match is likely coincidental and adds noise rather than signal.
+            _similarity_threshold = 0.4
+            relevant_analyses = [
+                sa
+                for sa in similar_analyses
+                if sa.similarity_score >= _similarity_threshold
+            ]
+            if relevant_analyses:
+                logger.info(
+                    "%d of %d retrieved analyses passed similarity threshold (%.1f)",
+                    len(relevant_analyses),
+                    len(similar_analyses),
+                    _similarity_threshold,
+                )
+            if relevant_analyses:
                 similar_past = [
                     {
                         "process_name": sa.process_name,
                         "timestamp": sa.timestamp.strftime("%Y-%m-%d"),
+                        "similarity_score": round(sa.similarity_score, 2),
                         "bottlenecks": sa.bottlenecks,
                         "recommendations": sa.recommendations,
                         "rejected_recs": sa.rejected_recs,
+                        "rejection_reasons": sa.rejection_reasons,
                     }
-                    for sa in similar_analyses
+                    for sa in relevant_analyses
                 ]
                 logger.info(
                     "Retrieved %d similar past analyses for context", len(similar_past)
@@ -1332,6 +1349,19 @@ def _persist_analysis(
             step_names=[s.step_name for s in process.steps],
             bottlenecks_found=[i.title for i in insight.issues],
             suggestions_offered=[r.title for r in insight.recommendations],
+            recommendations_full=[
+                r.model_dump(
+                    include={
+                        "title",
+                        "description",
+                        "expected_benefit",
+                        "estimated_roi",
+                    }
+                )
+                for r in insight.recommendations
+            ],
+            process_summary=insight.process_summary,
+            issue_descriptions=[i.description for i in insight.issues],
         )
 
         save_session(user_id=user_id, memory=memory)

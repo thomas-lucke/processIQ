@@ -32,6 +32,7 @@ from api.schemas import (
     FeedbackRequest,
     FeedbackResponse,
     ProfileResponse,
+    RecommendationSummary,
     SessionsResponse,
 )
 from processiq.agent import interface
@@ -385,6 +386,9 @@ async def get_sessions(user_id: str) -> SessionsResponse:
             suggestions_offered=m.suggestions_offered,
             suggestions_accepted=m.suggestions_accepted,
             suggestions_rejected=m.suggestions_rejected,
+            recommendations_full=[
+                RecommendationSummary(**r) for r in m.recommendations_full
+            ],
         )
         for m in memories
     ]

@@ -76,6 +76,13 @@ Extract process steps with these fields:
   - **Estimated values**: Explain your basis. E.g. "Cost estimated at $50/hr × 0.5h. No figure provided."
   - **Ambiguous data**: Anything unclear or that required a judgment call.
 
+**Annual Volume (optional):**
+- Extract `annual_volume` if the user mentions how many times the process runs per year (e.g., "we process 50 invoices per day" = ~12,500/year, "roughly 250 projects a year", "happens maybe once a week" = ~50/year).
+- **Do NOT ask for this field if the user hasn't mentioned it.** It's optional; the system will estimate from company size if not provided.
+- Only extract if the user has actually signaled they know the number (e.g., "we do this X times per day/week/month" or "roughly Y per year").
+- Convert to annual: "daily" × 250 workdays, "weekly" × 52, "monthly" × 12.
+- If user says "I don't know" or doesn't mention it, leave `annual_volume` as null (the system will estimate).
+
 **Extraction Guidelines:**
 1. **CRITICAL — Dependencies:** EVERY step after the first MUST have depends_on populated unless it truly has no prerequisite. When the user describes steps in sequence ("after that", "then", "following", "once X is done", "when"), each step depends on the previous one. When steps are described as alternatives (same group_id, group_type="alternative"), they share the same dependencies. When steps follow a group of alternatives, they depend on ALL alternatives in that group.
 2. For time ranges (e.g., "1-2 hours"), use the average

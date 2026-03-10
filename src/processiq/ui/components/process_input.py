@@ -2,7 +2,7 @@
 
 Provides multiple ways to input process data:
 1. Form-based step builder (add/remove steps)
-2. File upload (CSV/Excel)
+2. File upload (CSV/Excel for structured data; PDF/DOCX/PPTX/etc. for unstructured)
 3. Sample dataset for demos
 """
 
@@ -12,7 +12,12 @@ from typing import Any
 import streamlit as st
 
 from processiq.exceptions import ExtractionError, ValidationError
-from processiq.ingestion import load_csv_from_bytes, load_excel_from_bytes
+from processiq.ingestion import (
+    load_csv_from_bytes,
+    load_excel_from_bytes,
+    normalize_parsed_document,
+    parse_from_stream,
+)
 from processiq.models import ProcessData, ProcessStep
 from processiq.ui.state import (
     add_draft_step,
@@ -370,74 +375,150 @@ def _render_form_builder() -> None:
             set_process_data(process_data)
 
 
+_STRUCTURED_EXTENSIONS = (".csv", ".xlsx", ".xls")
+_DOCUMENT_EXTENSIONS = (".pdf", ".docx", ".doc", ".pptx", ".ppt", ".html", ".htm")
+_IMAGE_EXTENSIONS = (".png", ".jpg", ".jpeg", ".tiff", ".bmp")
+_ALL_UPLOAD_TYPES = [
+    "csv",
+    "xlsx",
+    "xls",
+    "pdf",
+    "docx",
+    "doc",
+    "pptx",
+    "ppt",
+    "html",
+    "htm",
+    "png",
+    "jpg",
+    "jpeg",
+]
+
+
 def _render_file_upload() -> None:
-    """Render the file upload section."""
+    """Render the file upload section.
+
+    Accepts two categories of files:
+    - Structured (CSV/Excel): columns are mapped directly to ProcessStep fields.
+    - Unstructured (PDF, DOCX, PPTX, images, HTML): parsed with Docling, then
+      extracted to process steps via LLM.
+    """
     st.markdown(
-        "*Upload a CSV or Excel file with process steps. "
-        "Expected columns: step_name, average_time_hours, resources_needed, "
-        "error_rate_pct (optional), cost_per_instance (optional), depends_on (optional)*"
+        "*Upload a file containing your process. "
+        "**Structured files** (CSV/Excel): must have columns step_name, average_time_hours, resources_needed, "
+        "and optionally error_rate_pct, cost_per_instance, depends_on. "
+        "**Unstructured files** (PDF, Word, PowerPoint, images): meeting notes, process descriptions, "
+        "diagrams — the AI will extract the steps.*"
     )
 
     uploaded_file = st.file_uploader(
         "Choose a file",
-        type=["csv", "xlsx", "xls"],
+        type=_ALL_UPLOAD_TYPES,
         key="process_file_upload",
     )
 
-    if uploaded_file is not None:
-        try:
-            # Determine file type and load
-            file_bytes = uploaded_file.getvalue()
-            file_name = uploaded_file.name.lower()
-            process_name = (
-                st.session_state.get("process_name")
-                or uploaded_file.name.rsplit(".", 1)[0]
+    if uploaded_file is None:
+        return
+
+    file_name = uploaded_file.name.lower()
+    process_name = (
+        st.session_state.get("process_name") or uploaded_file.name.rsplit(".", 1)[0]
+    )
+
+    try:
+        if file_name.endswith(_STRUCTURED_EXTENSIONS):
+            _handle_structured_upload(uploaded_file, file_name, process_name)
+        else:
+            _handle_document_upload(uploaded_file, process_name)
+
+    except (ExtractionError, ValidationError) as e:
+        st.error(
+            f"Failed to load file: {e.user_message if hasattr(e, 'user_message') else str(e)}"
+        )
+        logger.warning("File upload failed: %s", e)
+    except Exception as e:
+        st.error(f"Unexpected error loading file: {e}")
+        logger.exception("Unexpected error in file upload")
+
+
+def _handle_structured_upload(
+    uploaded_file: Any, file_name: str, process_name: str
+) -> None:
+    """Load a CSV or Excel file directly into ProcessData."""
+    file_bytes = uploaded_file.getvalue()
+
+    if file_name.endswith(".csv"):
+        process_data = load_csv_from_bytes(file_bytes, process_name=process_name)
+    else:
+        process_data = load_excel_from_bytes(file_bytes, process_name=process_name)
+
+    _apply_process_data(process_data, uploaded_file.name)
+
+
+def _handle_document_upload(uploaded_file: Any, process_name: str) -> None:
+    """Parse an unstructured document and extract process steps via LLM."""
+    with st.spinner(f"Reading {uploaded_file.name}..."):
+        parsed = parse_from_stream(uploaded_file, uploaded_file.name)
+
+    if not parsed.success:
+        st.error(f"Could not read file: {parsed.error}")
+        return
+
+    page_info = f" ({parsed.page_count} pages)" if parsed.page_count else ""
+    st.info(
+        f"Parsed {uploaded_file.name}{page_info}. "
+        f"Extracted {len(parsed.text)} characters across {len(parsed.chunks)} content blocks. "
+        "Extracting process steps with AI..."
+    )
+
+    with st.spinner("Extracting process steps..."):
+        process_data, response = normalize_parsed_document(parsed)
+
+    if response.response_type == "needs_clarification" or process_data is None:
+        clarification = response.clarification
+        if clarification:
+            st.warning(
+                f"The document was parsed but the AI needs more context to extract steps.\n\n"
+                f"{clarification.message}\n\n"
+                "Try describing the process in the chat, or provide the steps manually using "
+                "the 'Build Steps' tab."
             )
-
-            if file_name.endswith(".csv"):
-                process_data = load_csv_from_bytes(
-                    file_bytes, process_name=process_name
-                )
-            elif file_name.endswith((".xlsx", ".xls")):
-                process_data = load_excel_from_bytes(
-                    file_bytes, process_name=process_name
-                )
-            else:
-                st.error("Unsupported file type. Please upload CSV or Excel.")
-                return
-
-            # Convert to draft steps for editing
-            draft_steps = []
-            for step in process_data.steps:
-                draft_steps.append(
-                    {
-                        "step_name": step.step_name,
-                        "average_time_hours": step.average_time_hours,
-                        "resources_needed": step.resources_needed,
-                        "error_rate_pct": step.error_rate_pct,
-                        "cost_per_instance": step.cost_per_instance,
-                        "depends_on": step.depends_on,
-                    }
-                )
-
-            set_draft_steps(draft_steps)
-            set_process_data(process_data)
-            st.session_state.process_name = process_data.name
-
-            st.success(
-                f"Loaded {len(process_data.steps)} steps from {uploaded_file.name}"
+        else:
+            st.warning(
+                "The document was parsed but contained insufficient process information. "
+                "Try the 'Build Steps' tab to enter steps manually."
             )
-            logger.info(
-                "Loaded %d steps from uploaded file: %s",
-                len(process_data.steps),
-                uploaded_file.name,
-            )
+        logger.info(
+            "Document upload for '%s' requires clarification: %s",
+            uploaded_file.name,
+            clarification.detected_intent if clarification else "unknown",
+        )
+        return
 
-        except (ExtractionError, ValidationError) as e:
-            st.error(
-                f"Failed to load file: {e.user_message if hasattr(e, 'user_message') else str(e)}"
-            )
-            logger.warning("File upload failed: %s", e)
-        except Exception as e:
-            st.error(f"Unexpected error loading file: {e}")
-            logger.exception("Unexpected error in file upload")
+    _apply_process_data(process_data, uploaded_file.name)
+
+
+def _apply_process_data(process_data: ProcessData, source_filename: str) -> None:
+    """Store extracted ProcessData into session state and show confirmation."""
+    draft_steps = [
+        {
+            "step_name": step.step_name,
+            "average_time_hours": step.average_time_hours,
+            "resources_needed": step.resources_needed,
+            "error_rate_pct": step.error_rate_pct,
+            "cost_per_instance": step.cost_per_instance,
+            "depends_on": step.depends_on,
+        }
+        for step in process_data.steps
+    ]
+
+    set_draft_steps(draft_steps)
+    set_process_data(process_data)
+    st.session_state.process_name = process_data.name
+
+    st.success(f"Loaded {len(process_data.steps)} steps from {source_filename}")
+    logger.info(
+        "Loaded %d steps from uploaded file: %s",
+        len(process_data.steps),
+        source_filename,
+    )

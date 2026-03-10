@@ -2,209 +2,189 @@
 
 All notable design decisions and changes to ProcessIQ are documented here.
 
-Categories: `DESIGN`, `ARCHITECTURE`, `SCOPE`, `TECH`, `DECISION`, `CODE`, `FIX`
+---
+
+## 2026-03-10 (RAG improvements)
+
+### RAG embedding quality + prompt effectiveness
+
+- `AnalysisMemory` gains `process_summary` (LLM's 1-2 sentence characterisation) and `issue_descriptions` (full reasoning text, not just titles). Both populated in `_persist_analysis()` from `AnalysisInsight`.
+- `_build_embedding_text()` now includes: process summary, issue descriptions, recommendation descriptions from `recommendations_full`. Previous version was title-only keyword labels; now embeds the LLM's actual reasoning, making semantic retrieval match on meaning rather than names.
+- Similarity threshold added: retrieved past analyses below 0.4 cosine similarity are dropped before prompt injection. Prevents unrelated sessions from being injected as noise.
+- `rejection_reasons` now included in `similar_past` dict passed to the prompt (was missing despite template expecting it).
+- `analyze.j2` past analyses block: vague "give more calibrated recommendations" replaced with concrete directives — if same bottleneck type recurs, note whether same root cause applies; if recommendation was previously rejected, do not repeat unless approach is fundamentally different.
+- `analyze.j2` cross-session patterns block: elevated from a soft suggestion to a mandatory instruction — LLM must surface recurring organizational patterns explicitly in summary/patterns fields, not just note them privately.
 
 ---
 
 ## 2026-03-10
 
-### DESIGN: Process graph replaced serpentine grid with horizontal left-to-right flow
+### Export proposal download
+- `generate_proposal_markdown()` added to `export/summary.py` (Executive Summary → Current Process → Key Findings → Recommendations → Next Steps → Appendix). Client-side `buildProposalMarkdown()` mirrors this in the frontend; "Export" button in the results tab bar triggers a `.md` download.
 
-- Python `_grid_positions` (3-col serpentine) replaced by `_horizontal_positions` — linear processes lay out as a flat chain (`y=0`, `x=step_index`).
-- Frontend: node handles switched Top/Bottom → Left/Right; MiniMap added; container height is now dynamic; wrap-edge detection removed.
+### Annual volume metrics
+- `annual_volume` added to `ProcessData`. `ProcessMetrics` gains `hours_per_year`, `cost_per_year`, `annual_volume_used`, `volume_is_estimated`. Estimation falls back to company-size defaults (startup 120, small 250, mid 500, enterprise 2000) when not provided. Frontend hero stat block now leads with hours/year as the primary number.
 
-### CODE: Summary row added to both process steps tables
+### Analysis Library — full recommendation text
+- `recommendations_json` column migrated into `analysis_sessions` (idempotent `ALTER TABLE`). Full recommendation objects (title, description, expected_benefit, estimated_roi) now stored and served via `GET /sessions`. Library panel renders expandable recommendation cards with accepted/rejected colouring; falls back to title-only list for older sessions.
 
-- Both `ProcessStepsTable` (below chat) and `DataTab` (Data tab) now show a summary row: total time, total resources, avg error rate (sum / step count), and total cost.
+### Constraint reasoning — "What I ruled out"
+- `RuledOutOption` model and `ruled_out_recommendations` field added to `AnalysisInsight`. `analyze.j2` generates ruled-out options when constraints are active. Frontend shows a collapsed accordion below the recommendations list.
 
-### FIX: Process steps table not updating after chat adds a new step — `useEffect` dependency changed from `processData.steps` to `processData`.
+### Hero stat block + Investigation timeline
+- Overview tab now opens with a 2–4 column stat row (hours/year, time per run, cost, issues, recommendations) computed client-side.
+- `InvestigationTimeline` component renders `investigation_findings` as labelled, individually-expandable steps instead of a raw text dump.
 
-### CODE: Frontend wiring — profile pre-fill, context attribution, feedback persistence
+---
 
-- Profile loaded from server on mount and auto-saved (800ms debounce); settings panel reflects stored profile on return visits.
-- "Context used" block renders in OverviewTab when `context_sources` is non-empty.
-- Accept/Dismiss buttons call `POST /feedback/{session_id}`; accepted/rejected recommendations written to SQLite and injected into future analyses via `analyze.j2`.
-- First-use detection: onboarding note appended to analysis summary for new users.
+## 2026-03-10 (earlier)
+
+### Process graph layout — horizontal left-to-right flow
+- Replaced serpentine 3-column grid with flat horizontal layout. React Flow handles switched Top/Bottom → Left/Right; MiniMap added; container height dynamic.
+
+### Frontend wiring — profile, context attribution, feedback persistence
+- Profile loaded on mount and auto-saved (800ms debounce). "Context used" block in OverviewTab when `context_sources` is non-empty. Accept/Dismiss buttons call `POST /feedback/{session_id}`; results injected into future analyses.
+
+### Steps table summary row
+- Both process tables now show totals: time, resources, avg error rate, cost.
 
 ---
 
 ## 2026-03-09
 
-### FIX: Chat edits after analysis lost process context — `currentProcessData` passed from `page.tsx` to `ChatInterface` as fallback when `pendingProcessData` is cleared post-analysis.
+### Analysis Library view
+- `GET /sessions/{user_id}` endpoint; `AnalysisSessionSummary` schema. `LibraryPanel` component: collapsible session cards with issue/rec badges and acceptance rate bar. Library and Analyze views kept mounted to preserve chat state across nav switches.
 
-### ARCHITECTURE: Analysis Library view — past analyses accessible from sidebar
+### Process graph renderer
+- React Flow custom `processNode`: hover tooltips, variable-size circles (time % + severity boost), wrap-edge dashes, legend.
 
-- `GET /sessions/{user_id}` endpoint; `AnalysisSessionSummary` schema in Python and TypeScript.
-- `LibraryPanel` component: collapsible session cards with process name, date, issue/rec badges, acceptance rate bar.
-- `activeNav` lifted to `page.tsx`; Library and Analyze views kept mounted to preserve chat state across tab switches.
-
-### CODE: React Flow graph renderer — custom `processNode` type with hover tooltips, variable-size circles (time % + severity boost), wrap-edge dashes, legend.
-
-### CODE: UX additions — regulatory environment tooltip, "New analysis" button in settings, Data tab in ProcessIntelligencePanel.
+### FIX: Chat edits after analysis lost process context
+- `currentProcessData` passed to `ChatInterface` as fallback when `pendingProcessData` is cleared post-analysis.
 
 ---
 
 ## 2026-03-08
 
-### ARCHITECTURE: Persistent memory + ChromaDB RAG
-
-- SQLite persistence layer: `db.py` (shared connection), `profile_store.py` (CRUD + rejected approaches), `analysis_store.py` (sessions, feedback, cross-session pattern detection).
-- ChromaDB vector store (`vector_store.py`): provider-aware embeddings (OpenAI / Ollama / local fallback). Semantic retrieval scoped by user ID. All ops wrapped in try/except — RAG never blocks the pipeline.
-- Pipeline integration: `interface.py` retrieves similar analyses and persistent rejections before analysis; persists session and embeds after.
-- `analyze.j2` extended with three conditional blocks: past analyses, rejected approaches, recurring patterns.
-- User identity: localStorage UUID → `X-User-Id` header. No auth required.
-- API: `GET/PUT /profile/{user_id}`, `POST /feedback/{session_id}`, `context_sources` in `AnalyzeResponse`.
+### Persistent memory + ChromaDB RAG
+- SQLite persistence (`db.py`, `profile_store.py`, `analysis_store.py`). ChromaDB semantic retrieval scoped by user. Pipeline retrieves past analyses and rejections before analysis; embeds after. `analyze.j2` extended with three conditional RAG blocks. `GET/PUT /profile`, `POST /feedback`, `context_sources` in `AnalyzeResponse`.
 
 ---
 
 ## 2026-03-06
 
-### CODE: Investigation depth slider (1–10) in SettingsDrawer; wired to `max_cycles_override`.
-### CODE: FastAPI hardening — rate limiting (slowapi), input length caps, file extension whitelist, 50 MB size limit, session TTL + LRU eviction, CORS narrowed to `ALLOWED_ORIGIN`.
+- Investigation depth slider (1–10) wired to `max_cycles_override`.
+- FastAPI hardening: rate limiting, input caps, file extension whitelist, 50 MB limit, session TTL + LRU eviction, CORS narrowed.
 
 ---
 
 ## 2026-03-05
 
-### ARCHITECTURE: FastAPI + Next.js replacing Streamlit
+### FastAPI + Next.js replacing Streamlit
+- `api/main.py` with `/analyze`, `/extract`, `/extract-file`, `/continue`, `/graph-schema`. Next.js 15 App Router, TypeScript, Tailwind, React Flow. Two-phase layout: full-width chat → animated 40/60 split. Settings panel: LLM provider, analysis mode, constraints, business profile.
 
-- `api/main.py`: `/analyze`, `/extract`, `/extract-file`, `/continue`, `/graph-schema` endpoints.
-- Next.js 15 App Router, TypeScript, Tailwind, React Flow. Two-phase layout: full-width chat → animated reveal → 40/60 split.
-- Settings panel: LLM provider, analysis mode, constraints, business profile. Python backend unchanged.
-
-### DESIGN: Full visual redesign — dark theme, DM Sans, design tokens, left rail, header, context strip, reveal transition, empty state, chat elevation.
-
----
-
-## 2026-03-04
-
-### ARCHITECTURE: Post-analysis follow-up routes to extraction LLM with current process context — removed `followup.j2` and brittle keyword classifier.
-### FIX: Ollama analysis hang — `reasoning=False` on `ChatOllama`; `OLLAMA_TIMEOUT` config added.
-### FIX: Anthropic truncated analysis — `max_tokens` raised from 4096 to 8192.
-
----
-
-## 2026-03-03
-
-### ARCHITECTURE: Renderer-agnostic `GraphSchema` DTO — `GraphNode`/`GraphEdge`, Kahn's topological sort layout, severity precedence rules, before/after node sets; consumed by React Flow.
+### Full visual redesign
+- Dark theme, DM Sans, design tokens, left rail, header, reveal transition, empty state.
 
 ---
 
 ## 2026-02-27
 
-### ARCHITECTURE: Genuine agentic investigation loop replacing single-pass analysis
+### Genuine agentic investigation loop
+- `initial_analysis_node` seeds history; `investigate_node` binds tools; loops until no tool calls or `agent_max_cycles` hit. Three tools: `analyze_dependency_impact`, `validate_root_cause`, `check_constraint_feasibility`. `finalize_analysis_node` extracts tool output into `investigation_findings`.
 
-- `initial_analysis_node` seeds investigation history; `investigate_node` binds tools via `bind_tools()`; `ToolNode` executes; loops until no tool calls or `agent_max_cycles` hit.
-- Three tools: `analyze_dependency_impact`, `validate_root_cause`, `check_constraint_feasibility` (all use `InjectedState`).
-- `finalize_analysis_node` extracts `ToolMessage` content into `investigation_findings`.
-
-### CODE: Fresh `analysis_thread_id` per invocation to prevent state leakage; `agent_max_cycles` and `llm_task_investigation` added to config.
-### FIX: Extraction prompt now recognizes supplementary step data as an UPDATE rather than triggering `needs_clarification`.
-### DESIGN: `resources_needed` reframed as people-only count.
-
----
-
-## 2026-02-18
-
-### SCOPE: Deployment and product strategy documented in private docs. Corrected file format claims — full Docling format range deferred to Phase 2.
+### FIX: Extraction prompt now recognises supplementary step data as UPDATE rather than `needs_clarification`.
 
 ---
 
 ## 2026-02-17
 
-### DESIGN: Self-improving agent via recommendation feedback — thumbs up/down per recommendation; rejection reasons injected into `analyze.j2` on re-analysis.
-### ARCHITECTURE: File uploads merge with existing process data instead of replacing it — `ProcessData.merge_with()`.
-### DESIGN: ROI estimates added to `Recommendation` model; calculated from process data.
-### DESIGN: Step grouping — `group_id`/`group_type` (alternative/parallel) on `ProcessStep`.
+- Self-improving agent via recommendation feedback: thumbs up/down, rejection reasons injected into `analyze.j2` on re-analysis.
+- File uploads merge with existing process data (`ProcessData.merge_with()`).
+- ROI estimates added to `Recommendation` model.
+- Step grouping: `group_id`/`group_type` (alternative/parallel) on `ProcessStep`.
 
 ---
 
 ## 2026-02-16
 
-### CODE: 265-unit test suite; parallel post-extraction LLM calls via `ThreadPoolExecutor`; structured output for analysis replacing manual JSON parsing.
+- 265-unit test suite. Parallel post-extraction LLM calls via `ThreadPoolExecutor`. Structured output for analysis replacing manual JSON parsing.
 
 ---
 
 ## 2026-02-12
 
-### DESIGN: Progressive disclosure on recommendations — `plain_explanation` and `concrete_next_steps`; two expander layers per recommendation.
-### DESIGN: `RevenueRange` enum and business context threaded into `analyze.j2` for calibrated recommendations.
+- Progressive disclosure on recommendations: `plain_explanation`, `concrete_next_steps`, two expander layers.
+- `RevenueRange` enum threaded into `analyze.j2` for calibrated recommendations.
 
 ---
 
 ## 2026-02-06
 
-### CODE: LLM provider selector (OpenAI / Anthropic / Ollama) with model presets; expert mode removed; agent graph simplified from 8 → 4 nodes.
+- LLM provider selector (OpenAI / Anthropic / Ollama) with model presets. Expert mode removed. Agent graph simplified 8 → 4 nodes.
 
 ---
 
 ## 2026-02-05
 
-### ARCHITECTURE: LLM-first analysis pipeline — algorithms calculate facts, LLM makes judgments. New `analysis/metrics.py`, `models/insight.py`, `analyze.j2`.
-### CODE: Conversational edit support — process data + conversation history passed to extraction LLM.
+### LLM-first analysis pipeline
+- Algorithms calculate facts, LLM makes judgments. New `analysis/metrics.py`, `models/insight.py`, `analyze.j2`. Conversational edit support added.
 
 ---
 
 ## 2026-02-04
 
-### ARCHITECTURE: Per-task LLM configuration — `LLMTaskConfig` with resolution order (preset → task env var → global); three analysis presets.
-### ARCHITECTURE: LangGraph `SqliteSaver` persistence; thread ID format `{user_id}:{conversation_id}`.
+- Per-task LLM configuration (`LLMTaskConfig`, three analysis presets). LangGraph `SqliteSaver` persistence; thread ID format `{user_id}:{conversation_id}`.
 
 ---
 
 ## 2026-02-03
 
-### DECISION: Pivot from form-based to chat-first UI. `agent/interface.py` created as clean boundary — UI never imports `graph.py`.
+### DECISION: Chat-first UI. `agent/interface.py` as clean boundary — UI never imports `graph.py`.
 
 ---
 
 ## 2026-02-02
 
-### ARCHITECTURE: Centralized LLM factory — `llm.py` with Anthropic/OpenAI/Ollama support.
+- Centralised LLM factory (`llm.py`) with Anthropic/OpenAI/Ollama support.
 
 ---
 
 ## 2026-02-01
 
-### TECH: Jinja2 prompt templates replacing inline strings.
-### CODE: CSV/Excel data ingestion with Instructor-based normalizer.
+- Jinja2 prompt templates. CSV/Excel ingestion with Instructor-based normaliser.
 
 ---
 
 ## 2026-01-31
 
-### CODE: LangGraph agent (`state.py`, `nodes.py`, `edges.py`) and analysis algorithms (`bottleneck.py`, `roi.py`, `confidence.py`).
+- LangGraph agent (`state.py`, `nodes.py`, `edges.py`) and analysis algorithms.
 
 ---
 
 ## 2026-01-30
 
-### CODE: Pydantic domain models — `ProcessStep`, `ProcessData`, `Constraints`, `AnalysisResult`, `BusinessProfile`.
+- Pydantic domain models: `ProcessStep`, `ProcessData`, `Constraints`, `AnalysisResult`, `BusinessProfile`.
 
 ---
 
 ## 2026-01-29
 
-### SCOPE: Phase 1 / Phase 2 boundaries defined; files in-memory only.
-### TECH: `pydantic-settings` for centralized configuration.
+- Phase 1/2 boundaries defined. `pydantic-settings` for configuration.
 
 ---
 
 ## 2026-01-28
 
-### DECISION: Multi-agent architecture rejected — LangGraph nodes already provide task separation; tasks are sequential.
-### TECH: Phase 1 dependencies finalized; ChromaDB deferred to Phase 2.
+- Multi-agent architecture rejected — LangGraph nodes already provide task separation. ChromaDB deferred to Phase 2.
 
 ---
 
 ## 2026-01-27
 
-### DECISION: SQLite + ChromaDB dual-store for Phase 2. LangGraph Store rejected (key-value only, no SQL or vector search).
-### DECISION: Spinner over streaming for Phase 1; streaming deferred to Phase 2.
+- SQLite + ChromaDB dual-store chosen for Phase 2. LangGraph Store rejected (no SQL or vector search). Streaming deferred to Phase 2.
 
 ---
 
 ## 2026-01-26
 
-### DECISION: Agent justification documented — four agentic decision points requiring judgment calls.
-### ARCHITECTURE: Memory-ready design — Phase 1 populates from input; Phase 2 persists.
+- Agent justification documented. Memory-ready design: Phase 1 populates from input, Phase 2 persists.

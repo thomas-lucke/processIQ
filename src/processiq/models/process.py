@@ -79,6 +79,11 @@ class ProcessData(BaseModel):
     steps: list[ProcessStep] = Field(
         ..., min_length=1, description="List of process steps"
     )
+    annual_volume: int | None = Field(
+        default=None,
+        description="Estimated number of times this process runs per year. "
+        "If not provided, will be estimated from company size / industry.",
+    )
 
     @property
     def total_time_hours(self) -> float:

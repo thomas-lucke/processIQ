@@ -152,7 +152,7 @@ export function ChatInterface({
 }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: "assistant",
-    content: "Describe your business process - the steps involved, roughly how long each takes, and any dependencies between them. You can also upload a CSV or Excel file.",
+    content: "Describe your business process - the steps involved, roughly how long each takes, and any dependencies between them. You can also upload a file: PDF, Word document, Excel, CSV, PowerPoint, or image.",
     summary: "Initial prompt",
   }]);
   const [collapsedBefore, setCollapsedBefore] = useState(0);
@@ -340,7 +340,7 @@ export function ChatInterface({
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={isLoading}
-          title="Upload CSV or Excel"
+          title="Upload a file (PDF, Word, Excel, CSV, PowerPoint, image)"
           aria-label="Upload file"
           className="text-ink-faint hover:text-ink-muted disabled:opacity-40 transition-colors flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent rounded"
         >
@@ -380,6 +380,9 @@ export function ChatInterface({
           </svg>
         </button>
       </div>
+      <p className="px-4 pb-2 text-xs text-ink-faint flex-shrink-0">
+        Attach a file using the icon above &mdash; PDF, Word, Excel, CSV, PowerPoint, or image
+      </p>
     </div>
   );
 }

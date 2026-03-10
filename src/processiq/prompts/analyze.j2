@@ -35,14 +35,17 @@ The user has already reviewed previous recommendations and provided feedback.
 {% if similar_past_analyses %}
 ## Context from Past Analyses
 
-The user has analyzed similar processes before. Use this context to give
-more calibrated recommendations -- but don't just repeat past advice.
+The following past analyses were retrieved as semantically similar to the current process.
+Use them to give more targeted recommendations. Specifically:
+- If the same bottleneck type appeared in a past analysis, note whether the same root cause is likely here — or explain why this situation is different.
+- If a past recommendation was rejected, do NOT suggest it again unless your approach is fundamentally different and you explain why.
+- If a past recommendation was accepted, a similar approach may land well here — but adapt it to the current context, don't just repeat it.
 
 {% for analysis in similar_past_analyses %}
-- **{{ analysis.process_name }}** ({{ analysis.timestamp }}):
-  Bottlenecks: {{ analysis.bottlenecks | join(', ') }}
+- **{{ analysis.process_name }}** ({{ analysis.timestamp }}, similarity {{ analysis.similarity_score }}):
+  Bottlenecks found: {{ analysis.bottlenecks | join(', ') }}
   Recommendations given: {{ analysis.recommendations | join(', ') }}
-  {% if analysis.rejected_recs %}Rejected: {{ analysis.rejected_recs | join(', ') }}{% endif %}
+  {% if analysis.rejected_recs %}Rejected: {% for r in analysis.rejected_recs %}{{ r }}{% if analysis.rejection_reasons[loop.index0] %} ({{ analysis.rejection_reasons[loop.index0] }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
 {% endfor %}
 {% endif %}
 
@@ -58,16 +61,20 @@ them unless you have a compelling reason that addresses their original concern.
 {% endif %}
 
 {% if cross_session_patterns %}
-## Cross-Session Patterns
+## Organizational Patterns (Detected Across Multiple Analyses)
 
-These patterns have been detected across multiple analyses for this user:
+These recurring patterns have appeared in more than half of this user's past analyses.
+This is a strong signal — it likely reflects something about the organization itself,
+not any individual process.
 
 {% for pattern in cross_session_patterns %}
 - {{ pattern }}
 {% endfor %}
 
-Consider whether these patterns indicate systemic organizational issues
-rather than process-specific problems.
+**You MUST address this explicitly in your analysis.** In your `process_summary` or `patterns` field,
+note that this bottleneck type recurs across analyses and suggest this may be a systemic or
+cultural issue (e.g., approval culture, unclear ownership, risk aversion) — not a process design flaw.
+A process-level fix alone will not resolve a systemic problem.
 {% endif %}
 
 ---
@@ -120,7 +127,21 @@ For each recommendation:
 - **plain_explanation**: Explain what this means as if talking to someone who has never heard the term before. Include what it would realistically cost for a business of this size and context. Use specific tool categories or approaches, not jargon. Example: instead of "implement RPA", say "use a simple workflow tool like Zapier or Microsoft Power Automate to automatically route invoices based on amount -- typically $20-50/month for a small business."
 - **concrete_next_steps**: List 2-4 specific actions to get started. The FIRST step must be something they can do THIS WEEK with no budget. Not "evaluate options" -- actual steps like "create a shared spreadsheet tracking X" or "try a free trial of [tool category]".
 
-### 5. FOLLOW-UP QUESTIONS
+### 5. RULED-OUT OPTIONS — What did you consider but set aside?
+
+{% if constraints_summary %}
+Constraints are active. For each approach you evaluated but could NOT recommend because it directly conflicts with one of the stated constraints:
+- Write a concise title for the approach (5 words max)
+- State the specific constraint that blocked it in one plain sentence — not "not feasible", name the actual constraint (e.g., "No-hiring constraint", "Audit trail requirement", "Budget limit of $X")
+
+Only list genuine constraint conflicts. Do not list options you simply ranked lower than others. If a constraint blocked multiple similar approaches, combine them into one entry.
+
+If no constraints are set, leave `ruled_out_recommendations` as an empty list.
+{% else %}
+No constraints were provided. Leave `ruled_out_recommendations` as an empty list.
+{% endif %}
+
+### 6. FOLLOW-UP QUESTIONS
 
 What additional information would help refine this analysis?
 

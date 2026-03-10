@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -127,6 +128,21 @@ class AnalysisMemory(BaseModel):
     rejection_reasons: list[str] = Field(
         default_factory=list,
         description="Why suggestions were rejected (critical for learning)",
+    )
+    recommendations_full: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Full recommendation objects serialized as dicts (title, description, "
+        "expected_benefit, estimated_roi). Stored for the Analysis Library view.",
+    )
+    process_summary: str = Field(
+        default="",
+        description="LLM-generated 1-2 sentence summary of the process. "
+        "Included in ChromaDB embedding for richer semantic retrieval.",
+    )
+    issue_descriptions: list[str] = Field(
+        default_factory=list,
+        description="Full descriptions of identified issues (not just titles). "
+        "Included in ChromaDB embedding so future retrievals can match on reasoning.",
     )
     outcome_notes: str = Field(default="", description="Post-implementation notes")
 

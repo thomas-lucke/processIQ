@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getUserSessions } from "@/lib/api";
-import type { AnalysisSessionSummary } from "@/lib/types";
+import type { AnalysisSessionSummary, RecommendationSummary } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,68 @@ function EmptyLibrary() {
 }
 
 // ---------------------------------------------------------------------------
+// Recommendation card (expandable, with full text)
+// ---------------------------------------------------------------------------
+
+
+function RecommendationCard({
+  rec,
+  wasAccepted,
+  wasRejected,
+}: {
+  rec: RecommendationSummary;
+  wasAccepted: boolean;
+  wasRejected: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className={cn(
+      "rounded-lg border overflow-hidden",
+      wasAccepted ? "border-green-900/40 bg-green-950/20" :
+      wasRejected ? "border-dark-border bg-dark-bg/40 opacity-60" :
+      "border-dark-border bg-dark-bg/40"
+    )}>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full text-left px-3 py-2 flex items-center justify-between gap-2 hover:bg-dark-hover transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={cn(
+            "flex-shrink-0 text-xs",
+            wasAccepted ? "text-status-success" : wasRejected ? "text-ink-faint" : "text-ink-faint"
+          )}>
+            {wasAccepted ? "✓" : wasRejected ? "✕" : "·"}
+          </span>
+          <span className={cn(
+            "text-xs font-medium truncate",
+            wasRejected ? "line-through text-ink-faint" : "text-ink"
+          )}>
+            {rec.title}
+          </span>
+        </div>
+        <span className={cn(
+          "text-ink-faint transition-transform duration-150 text-xs flex-shrink-0",
+          expanded && "rotate-180"
+        )}>▼</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-dark-border px-3 py-2.5 space-y-2">
+          <p className="text-xs text-ink-muted leading-relaxed">{rec.description}</p>
+          {rec.expected_benefit && (
+            <p className="text-xs text-status-success/80">{rec.expected_benefit}</p>
+          )}
+          {rec.estimated_roi && (
+            <p className="text-xs text-ink-faint italic">{rec.estimated_roi}</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Session row / expanded detail
 // ---------------------------------------------------------------------------
 
@@ -62,7 +124,7 @@ function SessionCard({ session }: { session: AnalysisSessionSummary }) {
   const [expanded, setExpanded] = useState(false);
 
   const issueCount = session.bottlenecks_found.length;
-  const recCount = session.suggestions_offered.length;
+  const recCount = session.recommendations_full.length || session.suggestions_offered.length;
   const acceptedCount = session.suggestions_accepted.length;
 
   return (
@@ -142,7 +204,7 @@ function SessionCard({ session }: { session: AnalysisSessionSummary }) {
           )}
 
           {/* Recommendations + acceptance */}
-          {session.suggestions_offered.length > 0 && (
+          {recCount > 0 && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-ink-faint uppercase tracking-wide">Recommendations</p>
@@ -151,27 +213,39 @@ function SessionCard({ session }: { session: AnalysisSessionSummary }) {
                 </span>
               </div>
               <AcceptanceBar offered={recCount} accepted={acceptedCount} />
-              <ul className="space-y-1">
-                {session.suggestions_offered.map((r, i) => {
-                  const wasAccepted = session.suggestions_accepted.includes(r);
-                  const wasRejected = session.suggestions_rejected.includes(r);
-                  return (
-                    <li key={i} className="text-xs flex items-start gap-1.5">
-                      <span className={cn(
-                        "mt-0.5 flex-shrink-0",
-                        wasAccepted ? "text-status-success" : wasRejected ? "text-ink-faint line-through" : "text-ink-faint"
-                      )}>
-                        {wasAccepted ? "✓" : wasRejected ? "✕" : "·"}
-                      </span>
-                      <span className={cn(
-                        wasRejected ? "text-ink-faint line-through" : "text-ink-muted"
-                      )}>
-                        {r}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+              {session.recommendations_full.length > 0 ? (
+                <div className="space-y-1.5">
+                  {session.recommendations_full.map((rec, i) => (
+                    <RecommendationCard
+                      key={i}
+                      rec={rec}
+                      wasAccepted={session.suggestions_accepted.includes(rec.title)}
+                      wasRejected={session.suggestions_rejected.includes(rec.title)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                // Fallback for old sessions that only stored titles
+                <ul className="space-y-1">
+                  {session.suggestions_offered.map((r, i) => {
+                    const wasAccepted = session.suggestions_accepted.includes(r);
+                    const wasRejected = session.suggestions_rejected.includes(r);
+                    return (
+                      <li key={i} className="text-xs flex items-start gap-1.5">
+                        <span className={cn(
+                          "mt-0.5 flex-shrink-0",
+                          wasAccepted ? "text-status-success" : wasRejected ? "text-ink-faint" : "text-ink-faint"
+                        )}>
+                          {wasAccepted ? "✓" : wasRejected ? "✕" : "·"}
+                        </span>
+                        <span className={cn(wasRejected ? "text-ink-faint line-through" : "text-ink-muted")}>
+                          {r}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           )}
         </div>

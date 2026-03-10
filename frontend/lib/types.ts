@@ -72,6 +72,7 @@ export interface ProcessData {
   name: string;
   description?: string;
   steps: ProcessStep[];
+  annual_volume?: number;  // Estimated or user-provided annual process volume
 }
 
 export interface Issue {
@@ -103,12 +104,18 @@ export interface NotAProblem {
   appears_problematic_because?: string;
 }
 
+export interface RuledOutOption {
+  title: string;
+  reason: string;
+}
+
 export interface AnalysisInsight {
   process_summary: string;
   patterns?: string[];
   issues?: Issue[];
   recommendations?: Recommendation[];
   not_problems?: NotAProblem[];
+  ruled_out_recommendations?: RuledOutOption[];
   follow_up_questions?: string[];
   confidence_notes?: string;
   investigation_findings?: string[];
@@ -234,6 +241,13 @@ export interface FeedbackResponse {
 // Sessions (Library view) — mirrors api/schemas.py AnalysisSessionSummary
 // ---------------------------------------------------------------------------
 
+export interface RecommendationSummary {
+  title: string;
+  description: string;
+  expected_benefit: string;
+  estimated_roi: string;
+}
+
 export interface AnalysisSessionSummary {
   session_id: string;
   process_name: string;
@@ -245,6 +259,7 @@ export interface AnalysisSessionSummary {
   suggestions_offered: string[];
   suggestions_accepted: string[];
   suggestions_rejected: string[];
+  recommendations_full: RecommendationSummary[];
 }
 
 export interface SessionsResponse {

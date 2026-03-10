@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import type { AnalysisInsight, GraphSchema, Issue, ProcessData, Recommendation } from "@/lib/types";
+import type { AnalysisInsight, GraphSchema, Issue, ProcessData, Recommendation, RuledOutOption } from "@/lib/types";
 import { submitFeedback } from "@/lib/api";
 
 const ProcessGraph = dynamic(
@@ -109,19 +109,127 @@ function deriveHealth(insight: AnalysisInsight): "critical" | "at-risk" | "healt
 // Overview tab
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Investigation timeline helpers
+// ---------------------------------------------------------------------------
+
+function parseInvestigationStep(finding: string): { label: string; subject: string } {
+  if (finding.startsWith("Step '")) {
+    const match = finding.match(/^Step '([^']+)'/);
+    return { label: "Dependency impact", subject: match?.[1] ?? "step" };
+  }
+  if (finding.startsWith("Hypothesis:")) {
+    const issueLine = finding.split("\n").find((l) => l.startsWith("Issue:"));
+    return { label: "Root cause validated", subject: issueLine?.replace("Issue:", "").trim() ?? "hypothesis" };
+  }
+  if (finding.startsWith("Checking:")) {
+    const match = finding.match(/^Checking: '([^']+)'/);
+    const subject = match?.[1] ?? "recommendation";
+    return { label: "Constraint checked", subject: subject.length > 40 ? subject.slice(0, 40) + "…" : subject };
+  }
+  return { label: "Investigation step", subject: "" };
+}
+
+function InvestigationTimeline({ findings }: { findings: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const [openSteps, setOpenSteps] = useState<Set<number>>(new Set());
+
+  if (findings.length === 0) return null;
+
+  function toggleStep(i: number) {
+    setOpenSteps((prev) => {
+      const next = new Set(prev);
+      next.has(i) ? next.delete(i) : next.add(i);
+      return next;
+    });
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        className="w-full flex items-center justify-between text-xs text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        <span className="font-semibold uppercase tracking-wider">
+          How the agent investigated · {findings.length} tool call{findings.length !== 1 ? "s" : ""}
+        </span>
+        <span className="text-ink-faint">{expanded ? "▲" : "▼"}</span>
+      </button>
+      {expanded && (
+        <div className="rounded-lg border border-dark-border bg-dark-card divide-y divide-dark-border overflow-hidden">
+          {findings.map((finding, i) => {
+            const { label, subject } = parseInvestigationStep(finding);
+            const isOpen = openSteps.has(i);
+            return (
+              <div key={i} className="px-3 py-2.5">
+                <div className="flex items-start gap-2">
+                  <span className="text-xs font-bold text-ink-faint w-5 flex-shrink-0 mt-0.5 tabular-nums">
+                    {i + 1}.
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-ink leading-snug">
+                      <span className="font-medium text-accent">{label}</span>
+                      {subject && <span className="text-ink-muted"> — {subject}</span>}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => toggleStep(i)}
+                    aria-expanded={isOpen}
+                    className="text-xs text-ink-faint hover:text-ink-muted flex-shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    {isOpen ? "▲" : "▼"}
+                  </button>
+                </div>
+                {isOpen && (
+                  <pre className="mt-2 ml-7 text-2xs text-ink-faint whitespace-pre-wrap font-mono leading-relaxed">
+                    {finding}
+                  </pre>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Overview tab
+// ---------------------------------------------------------------------------
+
 function OverviewTab({
   insight,
   graphSchema,
+  processData,
   highlightedSteps,
   onHighlightSteps,
 }: {
   insight: AnalysisInsight;
   graphSchema?: GraphSchema | null;
+  processData?: ProcessData | null;
   highlightedSteps: string[];
   onHighlightSteps: (steps: string[]) => void;
 }) {
   const health = deriveHealth(insight);
   const topIssues = (insight.issues ?? []).slice(0, 3);
+
+  // Hero stat values — computed from processData if available
+  const totalTime = processData
+    ? processData.steps.reduce((s, step) => s + step.average_time_hours, 0)
+    : null;
+  const totalCost = processData
+    ? processData.steps.reduce((s, step) => s + (step.cost_per_instance ?? 0), 0)
+    : null;
+
+  // Estimate annual volume and compute hours/year
+  // If user provided annual_volume, use it; otherwise fall back to conservative estimate
+  const annualVolume = processData?.annual_volume ?? 250;
+  const hoursPerYear = totalTime ? totalTime * annualVolume : null;
+
+  const issueCount = insight.issues?.length ?? 0;
+  const recCount = insight.recommendations?.length ?? 0;
 
   const healthConfig = {
     critical: {
@@ -146,6 +254,55 @@ function OverviewTab({
 
   return (
     <div className="space-y-5">
+      {/* Hero stat block */}
+      {(hoursPerYear !== null || issueCount > 0) && (
+        <div className={cn(
+          "grid gap-3",
+          [hoursPerYear !== null, totalTime !== null, totalCost !== null && totalCost > 0, issueCount > 0, recCount > 0].filter(Boolean).length === 5
+            ? "grid-cols-5"
+            : [hoursPerYear !== null, totalTime !== null, totalCost !== null && totalCost > 0, issueCount > 0, recCount > 0].filter(Boolean).length === 4
+            ? "grid-cols-4"
+            : [hoursPerYear !== null, totalTime !== null, totalCost !== null && totalCost > 0, issueCount > 0, recCount > 0].filter(Boolean).length === 3
+            ? "grid-cols-3"
+            : "grid-cols-2",
+        )}>
+          {hoursPerYear !== null && (
+            <div className="bg-dark-card border border-accent/30 rounded-xl px-3 py-3 text-center">
+              <p className="text-2xl font-bold text-accent tabular-nums">{hoursPerYear.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider mt-0.5">Hours/year</p>
+            </div>
+          )}
+          {totalTime !== null && (
+            <div className="bg-dark-card border border-dark-border rounded-xl px-3 py-3 text-center">
+              <p className="text-2xl font-bold text-ink tabular-nums">{totalTime.toFixed(1)}h</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider mt-0.5">Per instance</p>
+            </div>
+          )}
+          {totalCost !== null && totalCost > 0 && (
+            <div className="bg-dark-card border border-dark-border rounded-xl px-3 py-3 text-center">
+              <p className="text-2xl font-bold text-ink tabular-nums">${totalCost.toLocaleString()}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider mt-0.5">Cost per run</p>
+            </div>
+          )}
+          {issueCount > 0 && (
+            <div className="bg-dark-card border border-status-danger/30 rounded-xl px-3 py-3 text-center">
+              <p className="text-2xl font-bold text-status-danger tabular-nums">{issueCount}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider mt-0.5">
+                {issueCount === 1 ? "Issue" : "Issues"}
+              </p>
+            </div>
+          )}
+          {recCount > 0 && (
+            <div className="bg-dark-card border border-accent/30 rounded-xl px-3 py-3 text-center">
+              <p className="text-2xl font-bold text-accent tabular-nums">{recCount}</p>
+              <p className="text-2xs text-ink-faint uppercase tracking-wider mt-0.5">
+                {recCount === 1 ? "Recommendation" : "Recommendations"}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Health summary card */}
       <div className={cn("rounded-xl border px-5 py-4 space-y-3", healthConfig.border, healthConfig.bg)}>
         <div className="flex items-center justify-between">
@@ -227,6 +384,11 @@ function OverviewTab({
             ))}
           </div>
         </div>
+      )}
+
+      {/* Agent investigation timeline */}
+      {(insight.investigation_findings?.length ?? 0) > 0 && (
+        <InvestigationTimeline findings={insight.investigation_findings!} />
       )}
     </div>
   );
@@ -544,6 +706,38 @@ function RecommendationCard({
   );
 }
 
+function RuledOutSection({ items }: { items: RuledOutOption[] }) {
+  const [open, setOpen] = useState(false);
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-dark-border bg-dark-card overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between px-4 py-3 text-xs text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        <span className="font-semibold uppercase tracking-wider">
+          What I ruled out ({items.length})
+        </span>
+        <span className="text-ink-faint">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="px-4 pb-3 space-y-2 border-t border-dark-border pt-3">
+          {items.map((item, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs">
+              <span className="text-status-danger flex-shrink-0 mt-0.5 font-bold">✗</span>
+              <span>
+                <span className="font-medium text-ink">{item.title}</span>
+                <span className="text-ink-muted"> — {item.reason}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function RecommendationsTab({
   insight,
   sessionId,
@@ -598,6 +792,7 @@ function RecommendationsTab({
           onHighlightSteps={onHighlightSteps}
         />
       ))}
+      <RuledOutSection items={insight.ruled_out_recommendations ?? []} />
     </div>
   );
 }
@@ -829,6 +1024,96 @@ function DataTab({ processData }: { processData?: ProcessData | null }) {
 }
 
 // ---------------------------------------------------------------------------
+// Proposal export helpers
+// ---------------------------------------------------------------------------
+
+function buildProposalMarkdown(insight: AnalysisInsight, processData: ProcessData | null | undefined): string {
+  const lines: string[] = [];
+  const name = processData?.name ?? "Process";
+  const now = new Date().toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+
+  lines.push(`# Process Improvement Proposal: ${name}`, "");
+  lines.push("## Executive Summary", "");
+  lines.push(insight.process_summary, "");
+
+  if (processData) {
+    const totalTime = processData.steps.reduce((s, step) => s + step.average_time_hours, 0);
+    const totalCost = processData.steps.reduce((s, step) => s + (step.cost_per_instance ?? 0), 0);
+    let snapshot = `**Process snapshot:** ${processData.steps.length} steps, ${totalTime.toFixed(1)} hours per run`;
+    if (totalCost > 0) snapshot += `, $${totalCost.toLocaleString()} cost per run`;
+    lines.push(snapshot, "");
+  }
+
+  if (processData) {
+    lines.push("## Current Process", "");
+    if (processData.description) lines.push(processData.description, "");
+    lines.push("**Steps:**", "");
+    processData.steps.forEach((step, i) => {
+      lines.push(`${i + 1}. **${step.step_name}** — ${step.average_time_hours.toFixed(1)} hours`);
+      if ((step.cost_per_instance ?? 0) > 0) lines.push(`   - Cost: $${(step.cost_per_instance ?? 0).toLocaleString()}`);
+    });
+    lines.push("");
+  }
+
+  if (insight.issues && insight.issues.length > 0) {
+    lines.push("## Key Findings", "");
+    insight.issues.forEach((issue, i) => {
+      lines.push(`### ${i + 1}. ${issue.title}`, "");
+      lines.push(`**Severity:** ${issue.severity.toUpperCase()}`, "");
+      lines.push(issue.description);
+      if (issue.affected_steps?.length) lines.push("", `**Affected steps:** ${issue.affected_steps.join(", ")}`);
+      if (issue.root_cause_hypothesis) lines.push("", `**Root cause:** ${issue.root_cause_hypothesis}`);
+      lines.push("");
+    });
+  }
+
+  if (insight.recommendations && insight.recommendations.length > 0) {
+    lines.push("## Recommendations for Improvement", "");
+    lines.push("Each recommendation below includes the change, expected impact, feasibility, and next steps.", "");
+    insight.recommendations.forEach((rec, i) => {
+      lines.push(`### ${i + 1}. ${rec.title}`, "");
+      lines.push(rec.description, "");
+      if (rec.expected_benefit) lines.push(`**Expected benefit:** ${rec.expected_benefit}`, "");
+      let feasLine = `**Feasibility:** ${rec.feasibility}`;
+      if (rec.estimated_roi) feasLine += `  |  **Estimated ROI:** ${rec.estimated_roi}`;
+      lines.push(feasLine, "");
+      if (rec.risks?.length) {
+        lines.push("**Risks & Trade-offs:**");
+        rec.risks.forEach((r) => lines.push(`- ${r}`));
+        lines.push("");
+      }
+      if (rec.concrete_next_steps?.length) {
+        lines.push("**How to get started:**");
+        rec.concrete_next_steps.forEach((step, j) => lines.push(`${j + 1}. ${step}`));
+        lines.push("");
+      }
+    });
+  }
+
+  lines.push("## Suggested Next Steps", "");
+  lines.push("1. **Review & Validate** — Share these findings with your team to confirm accuracy");
+  lines.push("2. **Prioritize** — Choose 1–2 recommendations to pilot (start with high-impact, low-complexity)");
+  lines.push("3. **Plan** — Define timeline, resources, and success metrics for each pilot");
+  lines.push("4. **Execute** — Run the pilot and track results");
+  lines.push("5. **Measure & Iterate** — Compare before/after metrics and refine as needed", "");
+
+  lines.push("---");
+  lines.push(`*Generated by ProcessIQ on ${now}*`);
+
+  return lines.join("\n");
+}
+
+function downloadMarkdown(content: string, filename: string): void {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -863,33 +1148,52 @@ export function ProcessIntelligencePanel({
             {runLabel}
           </p>
         )}
-        <div className="flex items-end gap-1" role="tablist" aria-label="Analysis sections">
-          {TABS.map((tab) => (
-            <button
-              key={tab.id}
-              role="tab"
-              aria-selected={activeTab === tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={cn(
-                "px-4 py-2 text-sm font-medium transition-all duration-100 border-b-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
-                activeTab === tab.id
-                  ? "text-ink border-accent"
-                  : "text-ink-muted border-transparent hover:text-ink hover:border-dark-border"
-              )}
-            >
-              {tab.label}
-              {tab.id === "issues" && (insight.issues?.length ?? 0) > 0 && (
-                <span className="ml-1.5 text-xs bg-dark-card text-ink-muted px-1.5 py-0.5 rounded-full border border-dark-border">
-                  {insight.issues!.length}
-                </span>
-              )}
-              {tab.id === "recommendations" && (insight.recommendations?.length ?? 0) > 0 && (
-                <span className="ml-1.5 text-xs bg-dark-card text-ink-muted px-1.5 py-0.5 rounded-full border border-dark-border">
-                  {insight.recommendations!.length}
-                </span>
-              )}
-            </button>
-          ))}
+        <div className="flex items-end justify-between">
+          <div className="flex items-end gap-1" role="tablist" aria-label="Analysis sections">
+            {TABS.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                aria-selected={activeTab === tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={cn(
+                  "px-4 py-2 text-sm font-medium transition-all duration-100 border-b-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
+                  activeTab === tab.id
+                    ? "text-ink border-accent"
+                    : "text-ink-muted border-transparent hover:text-ink hover:border-dark-border"
+                )}
+              >
+                {tab.label}
+                {tab.id === "issues" && (insight.issues?.length ?? 0) > 0 && (
+                  <span className="ml-1.5 text-xs bg-dark-card text-ink-muted px-1.5 py-0.5 rounded-full border border-dark-border">
+                    {insight.issues!.length}
+                  </span>
+                )}
+                {tab.id === "recommendations" && (insight.recommendations?.length ?? 0) > 0 && (
+                  <span className="ml-1.5 text-xs bg-dark-card text-ink-muted px-1.5 py-0.5 rounded-full border border-dark-border">
+                    {insight.recommendations!.length}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Export button */}
+          <button
+            onClick={() => {
+              const md = buildProposalMarkdown(insight, processData);
+              const slug = (processData?.name ?? "proposal").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+              downloadMarkdown(md, `${slug}-improvement-proposal.md`);
+            }}
+            className="mb-0.5 flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink px-2 py-1.5 rounded-md hover:bg-dark-hover transition-colors border border-transparent hover:border-dark-border"
+            title="Download improvement proposal as Markdown"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Export
+          </button>
         </div>
       </div>
 
@@ -899,6 +1203,7 @@ export function ProcessIntelligencePanel({
           <OverviewTab
             insight={insight}
             graphSchema={graphSchema}
+            processData={processData}
             highlightedSteps={highlightedSteps}
             onHighlightSteps={onHighlightSteps}
           />

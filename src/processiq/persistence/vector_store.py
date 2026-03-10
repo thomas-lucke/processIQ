@@ -86,19 +86,43 @@ def _build_embedding_text(
 ) -> str:
     """Construct structured text for embedding.
 
-    Includes fields that matter for semantic similarity: process name, industry,
-    step names, bottleneck titles, recommendation titles.
-    Excludes noisy fields like full descriptions and reasoning.
+    Ordered from most to least semantically distinctive:
+    - process_summary: LLM's own characterisation (richest signal)
+    - issue_descriptions: full reasoning, not just titles
+    - recommendation descriptions: what was actually suggested
+    - step names, bottleneck/recommendation titles: structural labels
+    - industry: scoping signal
+
+    Excludes: raw conversation, confidence notes, investigation findings
+    (too noisy or too session-specific to generalise across analyses).
     """
     parts = [f"Process: {memory.process_name}"]
+
+    if memory.process_summary:
+        parts.append(f"Summary: {memory.process_summary}")
+
     if profile and profile.industry:
         parts.append(f"Industry: {profile.industry.value}")
+
     if memory.step_names:
         parts.append(f"Steps: {', '.join(memory.step_names)}")
+
     if memory.bottlenecks_found:
         parts.append(f"Bottlenecks: {', '.join(memory.bottlenecks_found)}")
+
+    if memory.issue_descriptions:
+        parts.append(f"Issue details: {' | '.join(memory.issue_descriptions)}")
+
     if memory.suggestions_offered:
         parts.append(f"Recommendations: {', '.join(memory.suggestions_offered)}")
+
+    # Include recommendation descriptions from recommendations_full
+    rec_descriptions = [
+        r["description"] for r in memory.recommendations_full if r.get("description")
+    ]
+    if rec_descriptions:
+        parts.append(f"Recommendation details: {' | '.join(rec_descriptions)}")
+
     return "\n".join(parts)
 
 

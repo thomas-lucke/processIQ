@@ -12,7 +12,7 @@ import re
 from dataclasses import dataclass
 from enum import Enum
 
-from processiq.models import ProcessData
+from processiq.models import BusinessProfile, ProcessData
 
 logger = logging.getLogger(__name__)
 
@@ -167,6 +167,45 @@ class PatternMetrics:
     parallel_opportunities: int  # Steps that could potentially run in parallel
 
 
+# Annual volume estimation defaults by company size
+_VOLUME_DEFAULTS_BY_COMPANY_SIZE = {
+    "startup": 120,  # ~2 runs/week
+    "small": 250,  # ~1 per workday
+    "mid_market": 500,
+    "enterprise": 2000,
+}
+_FALLBACK_VOLUME = 250  # Conservative default when no profile available
+
+
+def estimate_annual_volume(
+    process_data: ProcessData, profile: BusinessProfile | None
+) -> tuple[int, bool]:
+    """Estimate annual process volume.
+
+    Args:
+        process_data: The process data (may contain user-provided annual_volume).
+        profile: Business profile with company size.
+
+    Returns:
+        (estimated_volume, is_estimated) tuple.
+        is_estimated=False if process_data.annual_volume was provided.
+    """
+    if process_data.annual_volume:
+        return process_data.annual_volume, False
+
+    if (
+        profile
+        and profile.company_size
+        and profile.company_size.value in _VOLUME_DEFAULTS_BY_COMPANY_SIZE
+    ):
+        return (
+            _VOLUME_DEFAULTS_BY_COMPANY_SIZE[profile.company_size.value],
+            True,
+        )
+
+    return _FALLBACK_VOLUME, True
+
+
 @dataclass
 class ProcessMetrics:
     """Complete metrics for a process, ready for LLM analysis.
@@ -193,14 +232,25 @@ class ProcessMetrics:
     has_error_rates: bool
     has_dependencies: bool
 
+    # Annual metrics (calculated from volume estimate)
+    annual_volume_used: int  # What was used for calculation
+    volume_is_estimated: bool  # Flag showing if volume was estimated vs. user-provided
+    hours_per_year: float  # total_time_hours * annual_volume_used
+    cost_per_year: (
+        float | None
+    )  # total_cost * annual_volume_used, or None if no cost data
 
-def calculate_process_metrics(process: ProcessData) -> ProcessMetrics:
+
+def calculate_process_metrics(
+    process: ProcessData, profile: BusinessProfile | None = None
+) -> ProcessMetrics:
     """Calculate all metrics for a process.
 
     This is the main entry point for the new analysis pipeline.
 
     Args:
         process: The process data to analyze.
+        profile: Optional business profile for volume estimation.
 
     Returns:
         ProcessMetrics with calculated facts for LLM analysis.
@@ -275,6 +325,11 @@ def calculate_process_metrics(process: ProcessData) -> ProcessMetrics:
         patterns.external_touchpoints,
     )
 
+    # Estimate annual volume
+    annual_volume, is_estimated = estimate_annual_volume(process, profile)
+    hours_per_year = total_time * annual_volume
+    cost_per_year = (total_cost * annual_volume) if has_all_costs else None
+
     return ProcessMetrics(
         process_name=process.name,
         total_time_hours=total_time,
@@ -286,6 +341,10 @@ def calculate_process_metrics(process: ProcessData) -> ProcessMetrics:
         has_all_costs=has_all_costs,
         has_error_rates=has_error_rates,
         has_dependencies=has_dependencies,
+        annual_volume_used=annual_volume,
+        volume_is_estimated=is_estimated,
+        hours_per_year=hours_per_year,
+        cost_per_year=cost_per_year,
     )
 
 
@@ -510,6 +569,10 @@ def _create_empty_metrics(name: str) -> ProcessMetrics:
         has_all_costs=False,
         has_error_rates=False,
         has_dependencies=False,
+        annual_volume_used=0,
+        volume_is_estimated=True,
+        hours_per_year=0.0,
+        cost_per_year=None,
     )
 
 

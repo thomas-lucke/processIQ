@@ -8,7 +8,7 @@ Key principle: The LLM fills these models, algorithms verify the math.
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class Issue(BaseModel):
@@ -37,6 +37,14 @@ class Issue(BaseModel):
         ...,
         description="How significant is this issue",
     )
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalise_severity(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
     root_cause_hypothesis: str = Field(
         default="",
         description="Why this issue might exist (hypothesis, not certainty)",
@@ -84,6 +92,14 @@ class Recommendation(BaseModel):
         ...,
         description="How hard is this to implement",
     )
+
+    @field_validator("feasibility", mode="before")
+    @classmethod
+    def normalise_feasibility(cls, v: object) -> object:
+        if isinstance(v, str):
+            return v.lower()
+        return v
+
     affected_steps: list[str] = Field(
         default_factory=list,
         description="Which steps would change if implemented",
@@ -104,6 +120,11 @@ class Recommendation(BaseModel):
         description="2-4 specific actions to start implementing this, "
         "ordered chronologically. First step should be doable this week.",
     )
+
+    @field_validator("concrete_next_steps")
+    @classmethod
+    def truncate_next_steps(cls, v: list[str]) -> list[str]:
+        return v[:4]
 
 
 class RuledOutOption(BaseModel):
@@ -186,6 +207,27 @@ class AnalysisInsight(BaseModel):
         default_factory=list,
         description="Questions that would help refine the analysis",
     )
+
+    @field_validator("follow_up_questions")
+    @classmethod
+    def validate_follow_up_questions(cls, v: list[str]) -> list[str]:
+        v = v[:3]
+        return [q.strip() for q in v if q.strip()]
+
+    @field_validator("issues")
+    @classmethod
+    def validate_issues(cls, v: list[Issue]) -> list[Issue]:
+        return [issue for issue in v if issue.title.strip()]
+
+    @field_validator("recommendations")
+    @classmethod
+    def validate_recommendations(cls, v: list[Recommendation]) -> list[Recommendation]:
+        cleaned = []
+        for rec in v:
+            if not rec.title.strip():
+                continue
+            cleaned.append(rec)
+        return cleaned
 
     # Confidence and caveats
     confidence_notes: str = Field(

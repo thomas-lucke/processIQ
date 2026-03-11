@@ -57,6 +57,59 @@ def _get_llm_model(
 # ---------------------------------------------------------------------------
 
 
+def memory_synthesis_node(state: AgentState) -> dict[str, Any]:
+    """Node: Pre-synthesise RAG memory context into a short brief before analysis.
+
+    Only runs when there is meaningful memory to synthesise. If memory is absent
+    or all similarity scores are low, sets memory_brief=None so initial_analysis_node
+    falls through to its existing raw-memory injection.
+
+    Fails gracefully — if the LLM call fails, memory_brief=None and analysis continues.
+    """
+    similar = state.get("similar_past_analyses") or []
+    rejections = state.get("persistent_rejections") or []
+    patterns = state.get("cross_session_patterns") or []
+
+    if not similar and not rejections and not patterns:
+        logger.debug("memory_synthesis_node: no memory context, skipping")
+        return {"memory_brief": None}
+
+    high_signal = [a for a in similar if a.get("similarity_score", 0) >= 0.5]
+    if not high_signal and not rejections and not patterns:
+        logger.debug("memory_synthesis_node: low similarity scores only, skipping")
+        return {"memory_brief": None}
+
+    logger.info(
+        "memory_synthesis_node: synthesising memory (%d analyses, %d rejections, %d patterns)",
+        len(similar),
+        len(rejections),
+        len(patterns),
+    )
+
+    try:
+        from langchain_core.messages import HumanMessage
+
+        from processiq.config import TASK_EXPLANATION
+        from processiq.llm import extract_text_content, get_chat_model
+        from processiq.prompts import render_prompt
+
+        model = get_chat_model(task=TASK_EXPLANATION)
+        prompt = render_prompt(
+            "memory_brief",
+            similar_past_analyses=similar,
+            persistent_rejections=rejections,
+            cross_session_patterns=patterns,
+        )
+        response = model.invoke([HumanMessage(content=prompt)])
+        brief = extract_text_content(response).strip()
+        logger.debug("memory_synthesis_node: brief generated (%d chars)", len(brief))
+        return {"memory_brief": brief}
+
+    except Exception as e:
+        logger.warning("memory_synthesis_node failed (non-critical): %s", e)
+        return {"memory_brief": None}
+
+
 def check_context_sufficiency(state: AgentState) -> dict[str, Any]:
     """Node: Check if we have sufficient context to proceed.
 
@@ -157,6 +210,9 @@ def initial_analysis_node(state: AgentState) -> dict[str, Any]:
     persistent_rejections = state.get("persistent_rejections") or None
     cross_session_patterns = state.get("cross_session_patterns") or None
 
+    # Use pre-synthesised memory brief when available; fall back to raw blobs
+    memory_brief = state.get("memory_brief") or None
+
     # Call LLM for analysis
     analysis_mode = state.get("analysis_mode")
     llm_provider = state.get("llm_provider")
@@ -170,9 +226,10 @@ def initial_analysis_node(state: AgentState) -> dict[str, Any]:
             analysis_mode=analysis_mode,
             llm_provider=llm_provider,
             feedback_history=feedback_text,
-            similar_past_analyses=similar_past,
-            persistent_rejections=persistent_rejections,
-            cross_session_patterns=cross_session_patterns,
+            memory_brief=memory_brief,
+            similar_past_analyses=None if memory_brief else similar_past,
+            persistent_rejections=None if memory_brief else persistent_rejections,
+            cross_session_patterns=None if memory_brief else cross_session_patterns,
         )
     except TimeoutError:
         insight = None
@@ -430,6 +487,7 @@ def _run_llm_analysis(
     analysis_mode: str | None = None,
     llm_provider: str | None = None,
     feedback_history: str | None = None,
+    memory_brief: str | None = None,
     similar_past_analyses: list[dict[str, Any]] | None = None,
     persistent_rejections: list[tuple[str, str]] | None = None,
     cross_session_patterns: list[str] | None = None,
@@ -466,6 +524,7 @@ def _run_llm_analysis(
             business_context=business_context,
             constraints_summary=constraints_summary,
             feedback_history=feedback_history,
+            memory_brief=memory_brief,
             similar_past_analyses=similar_past_analyses,
             persistent_rejections=persistent_rejections,
             cross_session_patterns=cross_session_patterns,

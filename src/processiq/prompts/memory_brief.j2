@@ -1,0 +1,38 @@
+You are a process optimization advisor reviewing your own memory before analyzing a new process.
+
+<memory_input>
+
+{% if similar_past_analyses %}
+Similar past analyses ({{ similar_past_analyses | length }}):
+{% for a in similar_past_analyses %}
+- {{ a.process_name }} (similarity {{ a.similarity_score }}): bottlenecks={{ a.bottlenecks | join(', ') }}, recommendations={{ a.recommendations | join(', ') }}{% if a.rejected_recs %}, rejected={{ a.rejected_recs | join(', ') }}{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if persistent_rejections %}
+Approaches rejected across sessions:
+{% for title, reason in persistent_rejections %}
+- "{{ title }}" — {{ reason }}
+{% endfor %}
+{% endif %}
+
+{% if cross_session_patterns %}
+Recurring patterns:
+{% for p in cross_session_patterns %}
+- {{ p }}
+{% endfor %}
+{% endif %}
+
+</memory_input>
+
+<instructions>
+Write a brief (8–10 lines max) summarising what is most relevant for the upcoming analysis. Include:
+1. Any bottleneck types that have appeared repeatedly — and whether the same root cause seems likely
+2. Any approaches the user has consistently rejected — phrase as a constraint ("avoid suggesting X because Y")
+3. Any cross-session patterns that suggest organisational rather than process issues
+
+Be concise. This brief will be injected into the analysis prompt as context. Do not pad it.
+If memory is sparse or all similarity scores are below 0.5, write: "No strong memory signal — treat this as a fresh analysis."
+</instructions>
+
+Synthesise the memory above into a brief for the upcoming analysis:

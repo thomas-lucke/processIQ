@@ -3,9 +3,9 @@
 Builds the stateful graph with nodes, edges, and conditional routing.
 
 Graph flow:
-    check_context → (sufficient) → initial_analysis → (issues found?) → investigate ↔ tools
-                  → (insufficient) → request_clarification → (loop back)  ↓ (no issues / cycle limit)
-                                                                        finalize → END
+    check_context → (sufficient) → memory_synthesis → initial_analysis → (issues found?) → investigate ↔ tools
+                  → (insufficient) → request_clarification → (loop back)          ↓ (no issues / cycle limit)
+                                                                               finalize → END
 """
 
 import logging
@@ -26,6 +26,7 @@ from processiq.agent.nodes import (
     finalize_analysis_node,
     initial_analysis_node,
     investigate_node,
+    memory_synthesis_node,
 )
 from processiq.agent.state import AgentState
 from processiq.agent.tools import INVESTIGATION_TOOLS
@@ -70,6 +71,7 @@ def build_graph() -> StateGraph[AgentState]:
     # Add nodes
     graph.add_node("check_context", check_context_sufficiency)
     graph.add_node("request_clarification", _request_clarification_node)
+    graph.add_node("memory_synthesis", memory_synthesis_node)
     graph.add_node("initial_analysis", initial_analysis_node)
     graph.add_node("investigate", investigate_node)
     graph.add_node("tools", ToolNode(INVESTIGATION_TOOLS))
@@ -84,16 +86,19 @@ def build_graph() -> StateGraph[AgentState]:
         route_after_context_check,
         {
             "request_clarification": "request_clarification",
-            "analyze": "initial_analysis",
+            "analyze": "memory_synthesis",
         },
     )
+
+    # memory_synthesis always proceeds to initial_analysis (unconditional)
+    graph.add_edge("memory_synthesis", "initial_analysis")
 
     graph.add_conditional_edges(
         "request_clarification",
         route_after_clarification,
         {
             "check_context": "check_context",
-            "analyze": "initial_analysis",
+            "analyze": "memory_synthesis",
         },
     )
 

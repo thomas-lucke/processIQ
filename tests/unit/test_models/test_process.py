@@ -38,9 +38,10 @@ class TestProcessStep:
         with pytest.raises(ValidationError):
             ProcessStep(step_name="X", average_time_hours=-1.0, resources_needed=1)
 
-    def test_rejects_zero_resources(self):
-        with pytest.raises(ValidationError):
-            ProcessStep(step_name="X", average_time_hours=1.0, resources_needed=0)
+    def test_allows_zero_resources_for_automated_steps(self):
+        # resources_needed=0 is valid for fully automated steps with no human touch
+        step = ProcessStep(step_name="X", average_time_hours=1.0, resources_needed=0)
+        assert step.resources_needed == 0
 
     def test_error_rate_upper_bound(self):
         with pytest.raises(ValidationError):

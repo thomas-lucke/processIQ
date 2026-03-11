@@ -7,7 +7,14 @@ class TestBuildGraph:
     def test_has_expected_nodes(self):
         graph = build_graph()
         nodes = set(graph.nodes.keys()) - {"__start__", "__end__"}
-        expected = {"check_context", "analyze", "finalize", "request_clarification"}
+        expected = {
+            "check_context",
+            "initial_analysis",
+            "investigate",
+            "tools",
+            "finalize",
+            "request_clarification",
+        }
         assert nodes == expected
 
     def test_no_old_nodes(self):

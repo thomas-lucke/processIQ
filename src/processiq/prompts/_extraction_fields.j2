@@ -1,0 +1,36 @@
+{# Shared macro: step field definitions used by all extraction templates.
+   Include this file where the field spec is needed:
+     {% include '_extraction_fields.j2' %}
+#}
+Extract each step with these fields:
+
+- **step_name**: Clear, concise name for the step.
+- **average_time_hours**: Time in hours. Convert minutes (÷60) and days (×8 working hours). For ranges (e.g., "1–2 hours"), use the midpoint.
+- **resources_needed**: Number of people. 0 = fully automated (no human touch). 1 = one person. 2+ = team collaboration.
+- **error_rate_pct**: How often this step causes rework, delays, or issues (0–100). Use 0 if unknown and add "error_rate_pct" to estimated_fields.
+- **cost_per_instance**: Labor cost in dollars per occurrence (hourly rate × time × resources). Use 0 if unknown and add "cost_per_instance" to estimated_fields.
+- **estimated_fields**: CRITICAL — list every field name where the user did NOT explicitly provide the value. A field set to 0 because the user did not mention it MUST appear here. A 0 NOT in estimated_fields means "the user explicitly said this value is zero." When in doubt, add the field — it is better to mark a field as estimated than to show a misleading zero.
+- **depends_on**: List of prerequisite step names. Use the exact names you have defined. Every step after the first MUST have this populated unless it truly has no prerequisite.
+- **group_id**: (optional) Short slug grouping steps that are alternatives or parallel. E.g., "receive_order" for phone vs. email intake.
+- **group_type**: Required if group_id is set. Either "alternative" (only one path executes per instance) or "parallel" (steps run simultaneously). Steps not described as alternatives or concurrent should have group_id=null and group_type=null — null means normal sequential flow.
+- **step_type**: "normal" (runs every time), "conditional" (only runs under certain conditions — use when: "if needed", "if rejected", "only if", triggered by failure), or "loop" (can cycle back — use when: "if not approved go back to", rework that feeds back into an earlier stage).
+- **confidence**: 0.0–1.0. Set below 0.7 when significant assumptions were made.
+- **notes**: Write a plain-language note the user will read when ANY of the following apply:
+  - Variable resources: state which count you assumed and why.
+  - Conditional step: explain the trigger condition and approximate frequency if available.
+  - Rework loop: name which step it loops back to and estimate expected passes if possible.
+  - Estimated values: explain your basis.
+  - Ambiguous data: note what was unclear and what judgment call you made.
+
+**Annual volume (optional):**
+Extract `annual_volume` only if the user mentions frequency (e.g., "50 invoices/day" = ~12,500/year, "once a week" = ~52/year). Convert: daily ×250, weekly ×52, monthly ×12. If not mentioned, leave as null.
+
+**Dependency rules:**
+- Sequential language ("after that", "then", "once X is done") → each step depends on the previous.
+- Alternatives share the same depends_on. Steps following a group of alternatives depend on ALL alternatives in that group.
+- Parallel steps share the same depends_on as each other.
+
+**Grouping rules:**
+- "phone or email" → both get group_id="receive_order", group_type="alternative"
+- "simultaneously" / "at the same time" / "in parallel" → group_type="parallel"
+- All other steps: group_id=null, group_type=null

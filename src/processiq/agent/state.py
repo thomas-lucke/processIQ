@@ -66,6 +66,9 @@ class AgentState(TypedDict, total=False):
     similar_past_analyses: list[dict[str, Any]]  # from ChromaDB retrieval
     persistent_rejections: list[tuple[str, str]]  # (rec_title, reason) across sessions
     cross_session_patterns: list[str]  # detected recurring patterns
+    memory_brief: (
+        str | None
+    )  # Pre-synthesised memory context from memory_synthesis_node
 
 
 # Initial state factory
@@ -105,4 +108,5 @@ def create_initial_state(
         similar_past_analyses=similar_past_analyses or [],
         persistent_rejections=persistent_rejections or [],
         cross_session_patterns=cross_session_patterns or [],
+        memory_brief=None,
     )

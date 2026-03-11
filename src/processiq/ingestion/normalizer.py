@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Literal, cast
 import instructor
 from anthropic import Anthropic
 from openai import OpenAI
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from processiq.config import TASK_EXTRACTION, settings
 from processiq.exceptions import ExtractionError
@@ -38,23 +38,49 @@ class ExtractedStep(BaseModel):
     """A process step extracted by the LLM."""
 
     step_name: str = Field(..., description="Name of the process step")
-    average_time_hours: float = Field(..., ge=0, description="Average time in hours")
+    average_time_hours: float = Field(..., description="Average time in hours")
     resources_needed: int = Field(
         ...,
-        ge=0,
         description="Number of people involved. Use 0 for fully automated steps with no human touch.",
     )
-    error_rate_pct: float = Field(
-        default=0.0, ge=0, le=100, description="Error rate percentage"
-    )
+    error_rate_pct: float = Field(default=0.0, description="Error rate percentage")
     cost_per_instance: float = Field(
-        default=0.0, ge=0, description="Cost per execution in dollars"
+        default=0.0, description="Cost per execution in dollars"
     )
     estimated_fields: list[str] = Field(
         default_factory=list,
         description="Field names that were estimated by AI rather than provided by the user "
         "(e.g., ['cost_per_instance', 'error_rate_pct'])",
     )
+
+    @field_validator("error_rate_pct", mode="before")
+    @classmethod
+    def clamp_error_rate(cls, v: object) -> object:
+        if isinstance(v, int | float):
+            return max(0.0, min(100.0, float(v)))
+        return v
+
+    @field_validator("average_time_hours", mode="before")
+    @classmethod
+    def clamp_time(cls, v: object) -> object:
+        if isinstance(v, int | float):
+            return max(0.0, float(v))
+        return v
+
+    @field_validator("resources_needed", mode="before")
+    @classmethod
+    def clamp_resources(cls, v: object) -> object:
+        if isinstance(v, int | float):
+            return max(0, int(v))
+        return v
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def clamp_confidence(cls, v: object) -> object:
+        if isinstance(v, int | float):
+            return max(0.0, min(1.0, float(v)))
+        return v
+
     depends_on: list[str] = Field(
         default_factory=list,
         description="REQUIRED for every step except the first. List the step_name "
@@ -85,6 +111,24 @@ class ExtractedStep(BaseModel):
     notes: str = Field(default="", description="Any caveats or assumptions made")
 
     @model_validator(mode="after")
+    def ensure_estimated_fields_complete(self) -> ExtractedStep:
+        """Auto-populate estimated_fields for zero numeric values the LLM forgot to flag.
+
+        Only applies to average_time_hours, cost_per_instance, and error_rate_pct.
+        resources_needed=0 is a valid explicit value (fully automated step) and is
+        intentionally excluded.
+        """
+        auto_estimated = set(self.estimated_fields)
+        if self.average_time_hours == 0.0:
+            auto_estimated.add("average_time_hours")
+        if self.cost_per_instance == 0.0:
+            auto_estimated.add("cost_per_instance")
+        if self.error_rate_pct == 0.0:
+            auto_estimated.add("error_rate_pct")
+        self.estimated_fields = list(auto_estimated)
+        return self
+
+    @model_validator(mode="after")
     def validate_group_fields(self) -> ExtractedStep:
         """Ensure group_id and group_type are both set or both unset."""
         if (self.group_id is None) != (self.group_type is None):
@@ -106,6 +150,11 @@ class ExtractionResult(BaseModel):
     warnings: list[str] = Field(
         default_factory=list, description="Issues found during extraction"
     )
+
+    @field_validator("steps")
+    @classmethod
+    def strip_empty_steps(cls, v: list[ExtractedStep]) -> list[ExtractedStep]:
+        return [s for s in v if s.step_name.strip()]
 
 
 class ClarificationNeeded(BaseModel):
@@ -197,6 +246,7 @@ def _extract_with_anthropic(
     content: str,
     additional_context: str = "",
     conversation_context: str = "",
+    has_process: bool = False,
     model: str = "claude-haiku-4-5-20251001",
 ) -> ExtractionResponse:
     """Extract process data using Anthropic Claude.
@@ -214,6 +264,7 @@ def _extract_with_anthropic(
         content=content,
         additional_context=additional_context,
         conversation_context=conversation_context,
+        has_process=has_process,
     )
 
     logger.debug("Extracting with Anthropic model: %s (temperature=0)", model)
@@ -244,6 +295,7 @@ def _extract_with_openai(
     content: str,
     additional_context: str = "",
     conversation_context: str = "",
+    has_process: bool = False,
     model: str = "gpt-4o-mini",
 ) -> ExtractionResponse:
     """Extract process data using OpenAI GPT.
@@ -253,7 +305,7 @@ def _extract_with_openai(
     - Clarifying questions (if input was too vague)
 
     Uses Instructor's built-in retry mechanism which passes validation errors
-    back to the LLM for self-correction (better than blind retries).
+    back to the LLM for self-correction (better than blank retries).
     """
     from processiq.llm import is_restricted_openai_model
 
@@ -263,6 +315,7 @@ def _extract_with_openai(
         content=content,
         additional_context=additional_context,
         conversation_context=conversation_context,
+        has_process=has_process,
     )
 
     restricted = is_restricted_openai_model(model)
@@ -387,6 +440,7 @@ def normalize_with_llm(
     provider: Literal["anthropic", "openai", "ollama"] | None = None,
     model: str | None = None,
     conversation_context: str = "",
+    has_process: bool = False,
 ) -> tuple[ProcessData | None, ExtractionResponse]:
     """Normalize messy data into structured ProcessData using an LLM.
 
@@ -404,6 +458,8 @@ def normalize_with_llm(
         model: Specific model override. If None, uses analysis mode or task config.
         conversation_context: Optional context with current process data and recent
             messages. Enables edit requests like "change step 3 time to 2 hours".
+        has_process: True when the session already has confirmed process data.
+            Used by the extraction router to select the correct prompt template.
 
     Returns:
         Tuple of (ProcessData | None, ExtractionResponse).
@@ -472,6 +528,7 @@ def normalize_with_llm(
                 content,
                 additional_context=additional_context,
                 conversation_context=conversation_context,
+                has_process=has_process,
                 model=model,
             )
         elif effective_provider == "openai":
@@ -479,6 +536,7 @@ def normalize_with_llm(
                 content,
                 additional_context=additional_context,
                 conversation_context=conversation_context,
+                has_process=has_process,
                 model=model,
             )
         else:

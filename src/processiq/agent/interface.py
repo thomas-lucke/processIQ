@@ -127,6 +127,7 @@ def _generate_improvement_suggestions(
     confidence: ConfidenceResult,
     analysis_mode: str | None = None,
     llm_provider: str | None = None,
+    business_context: str | None = None,
 ) -> str | None:
     """Generate user-friendly suggestions for improving extraction quality.
 
@@ -179,6 +180,7 @@ def _generate_improvement_suggestions(
             steps_with_errors=steps_with_errors,
             steps_with_dependencies=steps_with_deps,
             data_gaps=confidence.data_gaps,
+            business_context=business_context,
         )
 
         logger.debug("Generating improvement suggestions for: %s", process_data.name)
@@ -267,6 +269,7 @@ def _generate_post_extraction_extras(
     confidence: ConfidenceResult,
     analysis_mode: str | None = None,
     llm_provider: str | None = None,
+    business_context: str | None = None,
 ) -> tuple[str | None, AnalysisInsight | None]:
     """Generate improvement suggestions and draft analysis in parallel.
 
@@ -287,6 +290,7 @@ def _generate_post_extraction_extras(
                 confidence,
                 analysis_mode,
                 llm_provider,
+                business_context,
             ): "suggestions",
             executor.submit(
                 _generate_draft_analysis,
@@ -622,6 +626,7 @@ def extract_from_text(
             analysis_mode=analysis_mode,
             provider=llm_provider,
             conversation_context=conversation_context,
+            has_process=current_process_data is not None,
         )
 
         # Handle clarification requests (smart interviewer mode)
@@ -664,11 +669,16 @@ def extract_from_text(
         )
 
         # Generate improvement suggestions + draft analysis in parallel
+        from processiq.agent.nodes import _format_business_context_for_llm
+
         improvement_suggestions, draft_insight = _generate_post_extraction_extras(
             process_data,
             confidence,
             analysis_mode=analysis_mode,
             llm_provider=llm_provider,
+            business_context=_format_business_context_for_llm(profile)
+            if profile
+            else None,
         )
 
         # Build response message
@@ -945,6 +955,111 @@ def extract_from_file(
     )
 
 
+_REANALYSIS_SIGNALS = [
+    "re-analyze",
+    "reanalyze",
+    "re analyze",
+    "run analysis",
+    "run the analysis",
+    "fresh analysis",
+    "new analysis",
+    "analyze again",
+    "redo the analysis",
+]
+
+
+def _wants_reanalysis(message: str) -> bool:
+    """Return True if the message is explicitly requesting a fresh analysis run."""
+    lower = message.lower()
+    return any(signal in lower for signal in _REANALYSIS_SIGNALS)
+
+
+def _answer_followup(
+    user_message: str,
+    insight: AnalysisInsight,
+    constraints: Any | None,
+    profile: Any | None,
+    thread_id: str,
+    analysis_mode: str | None = None,
+) -> "AgentResponse":
+    """Answer a follow-up question about a completed analysis using followup.j2.
+
+    Called from continue_conversation when process data AND analysis_insight
+    are both present in the saved state. Routes the user message to the
+    followup prompt instead of re-running the full analysis.
+
+    Args:
+        user_message: The user's follow-up question or remark.
+        insight: The AnalysisInsight from the completed analysis.
+        constraints: Optional Constraints from saved state.
+        profile: Optional BusinessProfile from saved state.
+        thread_id: The conversation thread ID.
+        analysis_mode: Optional analysis mode preset.
+
+    Returns:
+        AgentResponse with a conversational reply (no process_data, no full analysis).
+    """
+    logger.info(
+        "Routing to followup prompt for thread=%s, message=%s",
+        thread_id,
+        user_message[:60],
+    )
+
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+
+        from processiq.agent.nodes import (
+            _format_business_context_for_llm,
+            _format_constraints_for_llm,
+        )
+        from processiq.config import TASK_EXPLANATION
+        from processiq.llm import extract_text_content, get_chat_model
+        from processiq.prompts import get_followup_prompt, get_system_prompt
+
+        constraints_summary = (
+            _format_constraints_for_llm(constraints) if constraints else None
+        )
+        business_context = (
+            _format_business_context_for_llm(profile) if profile else None
+        )
+
+        model = get_chat_model(task=TASK_EXPLANATION, analysis_mode=analysis_mode)
+
+        followup_prompt = get_followup_prompt(
+            user_question=user_message,
+            insight=insight,
+            constraints_summary=constraints_summary,
+            business_context=business_context,
+            history=[],
+        )
+
+        response = model.invoke(
+            [
+                SystemMessage(content=get_system_prompt(profile=profile)),
+                HumanMessage(content=followup_prompt),
+            ]
+        )
+
+        answer = extract_text_content(response).strip()
+        logger.info("Followup answer generated (%d chars)", len(answer))
+
+        return AgentResponse(
+            message=answer,
+            thread_id=thread_id,
+            needs_input=True,
+        )
+
+    except Exception as e:
+        logger.error("Failed to generate followup answer: %s", e)
+        return AgentResponse(
+            message="I wasn't able to answer that. Please try rephrasing your question.",
+            thread_id=thread_id,
+            needs_input=True,
+            is_error=True,
+            error_code="followup_error",
+        )
+
+
 def continue_conversation(
     thread_id: str,
     user_message: str,
@@ -1015,15 +1130,68 @@ def continue_conversation(
 
         # Check if we have process data from previous interaction
         process_data = saved_state.get("process")
-        if process_data:
-            # User is providing additional context or confirmation
-            # Add user message to clarification context and re-analyze
+        analysis_insight = saved_state.get("analysis_insight")
+
+        if process_data and analysis_insight:
+            # Analysis is already done.
+            # Route to followup unless the user is explicitly asking for a fresh run.
+            constraints = saved_state.get("constraints")
+            profile = saved_state.get("profile")
+
+            if _wants_reanalysis(user_message):
+                logger.info(
+                    "Re-analysis requested for thread=%s, re-running analysis",
+                    thread_id,
+                )
+                # Merge re-analysis note into profile context so the agent
+                # knows why it is running again
+                if profile is None:
+                    profile = BusinessProfile(
+                        industry=Industry.OTHER,
+                        company_size=CompanySize.SMALL,
+                        notes=user_message,
+                    )
+                elif profile.notes:
+                    profile = BusinessProfile(
+                        **{
+                            **profile.model_dump(),
+                            "notes": f"{profile.notes}\n{user_message}",
+                        }
+                    )
+                else:
+                    profile = BusinessProfile(
+                        **{**profile.model_dump(), "notes": user_message}
+                    )
+                return analyze_process(
+                    process=process_data,
+                    constraints=constraints,
+                    profile=profile,
+                    thread_id=thread_id,
+                )
+
+            # Regular follow-up question or remark — answer conversationally
             logger.info(
-                "Continuing with saved process data, user message: %s",
+                "Post-analysis follow-up for thread=%s, message: %s",
+                thread_id,
+                user_message[:50],
+            )
+            return _answer_followup(
+                user_message=user_message,
+                insight=analysis_insight,
+                constraints=constraints,
+                profile=profile,
+                thread_id=thread_id,
+                analysis_mode=analysis_mode,
+            )
+
+        if process_data:
+            # Process loaded but no analysis yet — user is providing context.
+            # Add user message to profile notes and re-run analysis.
+            logger.info(
+                "Continuing with saved process data (no analysis yet), user message: %s",
                 user_message[:50],
             )
 
-            # Get any saved constraints and profile
             constraints = saved_state.get("constraints")
             profile = saved_state.get("profile")
 

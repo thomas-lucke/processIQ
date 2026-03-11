@@ -27,8 +27,6 @@ dependencies = [
     # Data processing
     "pandas>=2.2.0",              # Using 2.2.x; pandas 3.0 has breaking changes
     "openpyxl>=3.1.5",
-    # UI
-    "streamlit>=1.53.1",
     # Observability
     "langsmith>=0.6.6",
     # Phase 2
@@ -37,6 +35,10 @@ dependencies = [
     "python-multipart>=0.0.9",
     "slowapi>=0.1.9",
     "chromadb>=1.4.1",
+]
+
+[project.optional-dependencies]
+ingestion = [
     "docling>=2.71.0",
 ]
 

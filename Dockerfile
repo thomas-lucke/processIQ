@@ -4,7 +4,6 @@ WORKDIR /app
 
 RUN pip install uv
 
-ARG CACHEBUST=1
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
 COPY api/ api/

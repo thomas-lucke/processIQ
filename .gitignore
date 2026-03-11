@@ -7,8 +7,6 @@ venv/
 .eggs/
 *.egg-info/
 
-# uv
-uv.lock
 
 # Environment
 .env

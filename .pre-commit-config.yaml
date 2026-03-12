@@ -3,7 +3,7 @@ repos:
     rev: v0.9.10
     hooks:
       - id: ruff
-        args: [--fix]
+        args: [--fix, --unsafe-fixes]
       - id: ruff-format
 
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -15,6 +15,11 @@ repos:
           - pydantic>=2.0.0
           - pydantic-settings>=2.0.0
           - pandas-stubs>=2.0.0
+          - langchain-core>=0.3.0
+          - langchain-anthropic>=0.3.0
+          - langchain-openai>=0.3.0
+          - instructor>=1.0.0
+          - langchain-ollama>=0.2.0
         args: [--ignore-missing-imports]
 
   - repo: https://github.com/pre-commit/pre-commit-hooks

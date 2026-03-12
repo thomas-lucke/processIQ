@@ -12,7 +12,7 @@ Supports integration with Docling for document parsing:
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 import instructor
 from anthropic import Anthropic
@@ -269,16 +269,13 @@ def _extract_with_anthropic(
 
     logger.debug("Extracting with Anthropic model: %s (temperature=0)", model)
 
-    result = cast(
-        ExtractionResponse,
-        client.messages.create(  # pyright: ignore[reportCallIssue]
-            model=model,
-            max_tokens=4096,
-            temperature=0,  # Maximize schema adherence for extraction
-            max_retries=3,  # Instructor retries with validation feedback
-            messages=[{"role": "user", "content": prompt}],
-            response_model=ExtractionResponse,
-        ),
+    result: ExtractionResponse = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        temperature=0,  # Maximize schema adherence for extraction
+        max_retries=3,  # Instructor retries with validation feedback
+        messages=[{"role": "user", "content": prompt}],
+        response_model=ExtractionResponse,
     )
 
     if result.response_type == "extracted" and result.extraction:
@@ -340,7 +337,7 @@ def _extract_with_openai(
         create_kwargs["max_tokens"] = 4096
         create_kwargs["temperature"] = 0
 
-    result = cast(ExtractionResponse, client.chat.completions.create(**create_kwargs))  # pyright: ignore[reportCallIssue,reportArgumentType]
+    result: ExtractionResponse = client.chat.completions.create(**create_kwargs)  # type: ignore[call-overload]
 
     if result.response_type == "extracted" and result.extraction:
         logger.info("Extracted %d steps with OpenAI", len(result.extraction.steps))

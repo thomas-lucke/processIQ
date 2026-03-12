@@ -29,7 +29,7 @@ def _get_metrics(state: dict[str, Any]) -> Any:
     return calculate_process_metrics(state["process"])
 
 
-@tool  # type: ignore[misc]
+@tool
 def analyze_dependency_impact(
     step_name: str,
     question: str,
@@ -70,7 +70,7 @@ def analyze_dependency_impact(
     return "\n".join(lines)
 
 
-@tool  # type: ignore[misc]
+@tool
 def validate_root_cause(
     issue_title: str,
     hypothesis: str,
@@ -135,7 +135,7 @@ def validate_root_cause(
     return "\n".join(lines)
 
 
-@tool  # type: ignore[misc]
+@tool
 def check_constraint_feasibility(
     recommendation_concept: str,
     concern: str,

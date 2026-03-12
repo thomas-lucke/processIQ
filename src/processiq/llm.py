@@ -166,11 +166,11 @@ def _get_anthropic_model(model: str, temperature: float) -> BaseChatModel:
             user_message="Please set ANTHROPIC_API_KEY in your environment or .env file.",
         )
 
-    return ChatAnthropic(
-        model=model,  # pyright: ignore[reportCallIssue]
+    return ChatAnthropic(  # type: ignore[call-arg]
+        model=model,
         api_key=settings.anthropic_api_key,
         temperature=temperature,
-        max_tokens=8192,  # pyright: ignore[reportCallIssue]
+        max_tokens=8192,
     )
 
 

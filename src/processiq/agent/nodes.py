@@ -356,7 +356,7 @@ def finalize_analysis_node(state: AgentState) -> dict[str, Any]:
     tool_findings = [
         msg.content
         for msg in state.get("messages", [])
-        if isinstance(msg, ToolMessage) and msg.content
+        if isinstance(msg, ToolMessage) and isinstance(msg.content, str) and msg.content
     ]
 
     if tool_findings and insight:

@@ -1,8 +1,5 @@
 import type { NextConfig } from "next";
 
-const nextConfig: NextConfig = {
-  // Allow the standalone output for Docker/Railway deployments
-  output: "standalone",
-};
+const nextConfig: NextConfig = {};
 
 export default nextConfig;

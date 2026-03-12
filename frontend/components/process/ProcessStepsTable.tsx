@@ -85,10 +85,10 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
     if (fieldDef?.type === "number") {
       const num = parseFloat(rawValue);
       if (!isNaN(num)) {
-        (parsed as Record<string, unknown>)[field] = num;
+        (parsed as unknown as Record<string, unknown>)[field] = num;
       }
     } else {
-      (parsed as Record<string, unknown>)[field] = rawValue;
+      (parsed as unknown as Record<string, unknown>)[field] = rawValue;
     }
 
     const updated = localSteps.map((s, i) => (i === rowIndex ? parsed : s));

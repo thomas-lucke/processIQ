@@ -50,6 +50,7 @@ dev = [
     "vulture>=2.15",
     "bandit>=1.9.4",
     "detect-secrets>=1.5.0",
+    "httpx>=0.28.1",
 ]
 
 [build-system]
@@ -110,6 +111,7 @@ check_untyped_defs = false
 # Pytest configuration
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 asyncio_mode = "auto"
 markers = [
     "llm: tests requiring a live LLM API call (skip with: -m 'not llm')",

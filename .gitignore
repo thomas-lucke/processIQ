@@ -40,7 +40,14 @@ Thumbs.db
 
 # Project-specific
 docs/private/
+docs/example_data/
+--exclude-files
 
+# Streamlit (removed from project)
+.streamlit/
+
+# detect-secrets
+.secrets.new
 
 # Node.js
 node_modules/

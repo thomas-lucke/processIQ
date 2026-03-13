@@ -5,6 +5,9 @@ AI-powered process optimization advisor that understands business context — no
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Agent](https://img.shields.io/badge/agent-LangGraph-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Backend CI](https://github.com/SkybrushThriftwood/processIQ/actions/workflows/backend-ci.yml/badge.svg)
+![Frontend CI](https://github.com/SkybrushThriftwood/processIQ/actions/workflows/frontend-ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/SkybrushThriftwood/processIQ/graph/badge.svg?token=4JYVKASHOK)](https://codecov.io/gh/SkybrushThriftwood/processIQ)
 
 ---
 
@@ -392,18 +395,50 @@ pnpm dev
 ## Development
 
 ```bash
+# Install pre-commit hooks (run once after cloning)
+pre-commit install
+
 # Run tests
 uv run pytest
 
 # Run only non-LLM tests (fast, no API calls)
 uv run pytest -m "not llm"
 
+# Run tests with coverage
+uv run pytest -m "not llm" --cov=src --cov-report=term-missing
+
 # Lint
 uv run ruff check src/
 
 # Type check
 uv run mypy src/
+
+# Security scan
+uv run bandit -r src/
 ```
+
+---
+
+## Engineering Quality
+
+Two CI pipelines run on every push and pull request. PRs cannot merge to `main` unless both pass.
+
+**Backend CI** (`backend-ci.yml`) runs:
+
+| Step | Tool | Why |
+|------|------|-----|
+| Lint + format | `ruff` | Unified linter and formatter; replaces Flake8 + isort in a single fast tool |
+| Type checking | `mypy` (strict) | Catches type errors before runtime; enforces contract between modules |
+| Tests | `pytest -m "not llm"` | LLM-dependent tests are marked and excluded from CI to keep pipelines fast and deterministic |
+| Coverage | `pytest-cov` → Codecov | XML report uploaded on every run; badge reflects current `main` |
+| Security scan | `bandit` | Flags unsafe patterns (eval, subprocess shell injection, weak crypto); findings reviewed and suppressed only with documented justification |
+| Secret scan | `detect-secrets` | Scans against a committed baseline; fails the build if new secrets are introduced |
+
+**Frontend CI** (`frontend-ci.yml`) runs ESLint, TypeScript type-checking (`tsc --noEmit`), and a production build check.
+
+**Local development** uses `pre-commit` hooks (ruff, mypy) so the same checks run before every commit — CI and local behavior stay in sync.
+
+All API keys and tokens are stored as GitHub Encrypted Secrets. `detect-secrets` and GitHub's built-in secret scanning act as a second layer of defence.
 
 ---
 

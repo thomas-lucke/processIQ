@@ -64,6 +64,7 @@ jobs:
             --exclude-files 'pnpm-lock\.yaml' \
             --exclude-files '.*\.lock' \
             --exclude-files 'uv\.lock' \
+            --exclude-files '\.secrets.*' \
             > .secrets.new
           diff <(jq -S '.results' .secrets.baseline) <(jq -S '.results' .secrets.new) \
             && echo "No new secrets detected." \

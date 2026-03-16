@@ -79,12 +79,24 @@ export async function extractText(
   });
 }
 
+const ALLOWED_EXTENSIONS = new Set([".csv", ".xlsx", ".xls", ".pdf", ".docx", ".doc", ".ppt", ".pptx", ".html", ".htm", ".jpg", ".jpeg", ".png", ".bmp", ".tiff"]);
+const MAX_FILE_MB = 50;
+
 export async function extractFile(
   file: File,
   analysisMode?: string | null,
   llmProvider?: string | null,
   currentProcessData?: ProcessData | null,
 ): Promise<ExtractResponse> {
+  // Validate before uploading — avoids waiting for a full upload only to get rejected
+  const ext = "." + file.name.split(".").pop()!.toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    throw new Error(`Unsupported file type '${ext}'. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(", ")}`);
+  }
+  if (file.size > MAX_FILE_MB * 1024 * 1024) {
+    throw new Error(`File too large. Maximum size is ${MAX_FILE_MB} MB.`);
+  }
+
   const form = new FormData();
   form.append("file", file);
   if (analysisMode) form.append("analysis_mode", analysisMode);
@@ -98,8 +110,10 @@ export async function extractFile(
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`API ${res.status}: ${detail}`);
+    const text = await res.text().catch(() => res.statusText);
+    let detail = text;
+    try { detail = JSON.parse(text).detail ?? text; } catch { /* not JSON */ }
+    throw new Error(`Upload failed (${res.status}): ${detail}`);
   }
 
   return res.json() as Promise<ExtractResponse>;

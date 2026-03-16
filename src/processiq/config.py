@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr = SecretStr("")
     langsmith_api_key: SecretStr = SecretStr("")
     langsmith_endpoint: str = "https://eu.api.smith.langchain.com"
-    langsmith_tracing: bool = True
+    langsmith_tracing: bool = False
     langchain_project: str = "processiq"
 
     # LLM Configuration

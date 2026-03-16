@@ -258,22 +258,43 @@ function SessionCard({ session }: { session: AnalysisSessionSummary }) {
 // Main panel
 // ---------------------------------------------------------------------------
 
-export function LibraryPanel() {
+export function LibraryPanel({ isActive }: { isActive: boolean }) {
   const [sessions, setSessions] = useState<AnalysisSessionSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setSessions(null);
+    setError(null);
     getUserSessions()
       .then((res) => setSessions(res.sessions))
       .catch(() => setError("Could not load past analyses."));
-  }, []);
+  };
+
+  useEffect(() => {
+    if (isActive) load();
+  }, [isActive]);
 
   return (
     <div className="flex flex-col h-full bg-dark-bg">
       {/* Header */}
-      <div className="flex-shrink-0 border-b border-dark-border px-6 py-4">
-        <h2 className="text-sm font-semibold text-ink">Analysis library</h2>
-        <p className="text-xs text-ink-faint mt-0.5">Your past analyses, newest first.</p>
+      <div className="flex-shrink-0 border-b border-dark-border px-6 py-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-ink">Analysis library</h2>
+          <p className="text-xs text-ink-faint mt-0.5">Your past analyses, newest first.</p>
+        </div>
+        <button
+          onClick={load}
+          title="Refresh"
+          aria-label="Refresh analyses"
+          className="text-ink-faint hover:text-ink-muted transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent rounded"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M21 2v6h-6"/>
+            <path d="M3 12a9 9 0 0 1 15-6.7L21 8"/>
+            <path d="M3 22v-6h6"/>
+            <path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+          </svg>
+        </button>
       </div>
 
       {/* Content */}

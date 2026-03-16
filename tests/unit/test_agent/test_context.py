@@ -54,10 +54,6 @@ def _make_enum_msg(
 
 
 class TestSerializeProcessData:
-    def test_empty_data_returns_empty_string(self):
-        # ProcessData requires at least 1 step — pass None to test empty path
-        assert serialize_process_data(None) == ""
-
     def test_none_returns_empty_string(self):
         assert serialize_process_data(None) == ""
 

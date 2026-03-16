@@ -4,6 +4,10 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ---
 
+## 2026-03-16
+
+### CODE: Test coverage — `agent/interface.py` — 33 new unit tests covering `extract_from_text`, `analyze_process`, `continue_conversation`, and `AgentResponse` properties. Overall `src/` coverage moved from 64% → 72%.
+
 ## 2026-03-13
 
 ### CODE: Export dropdown — `.md`, `.txt`, and PDF

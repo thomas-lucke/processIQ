@@ -112,7 +112,7 @@ class TestBuildGraphSchemaStructure:
         assert result.edges[0].source == "Start"
         assert result.edges[0].target == "End"
 
-    def test_no_edges_when_no_dependencies(self, simple_process):
+    def test_no_edges_when_no_dependencies(self):
         process = ProcessData(
             name="Flat",
             steps=[

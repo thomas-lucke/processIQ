@@ -42,8 +42,8 @@ class TestCheckContextSufficiency:
             profile=full_profile,
         )
         result = check_context_sufficiency(state)
-        # Full profile + constraints should yield high confidence
-        assert result["confidence_score"] > 0
+        # Full profile + constraints should yield well above minimal confidence
+        assert result["confidence_score"] > 0.5
         assert isinstance(result["needs_clarification"], bool)
         assert "current_phase" in result
         assert len(result["reasoning_trace"]) >= 1

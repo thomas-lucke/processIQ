@@ -87,14 +87,12 @@ class TestRouteAfterInitialAnalysis:
         state = {"analysis_insight": insight, "max_cycles_override": None}
         assert route_after_initial_analysis(state) == "finalize"
 
-    def test_routes_to_finalize_when_max_cycles_zero(self):
-        # Note: max_cycles_override=0 is falsy, so it falls back to settings.agent_max_cycles.
-        # To disable investigation via override, the caller must pass a non-zero override
-        # or rely on settings.agent_max_cycles=0. This test documents the actual behavior:
-        # 0 is treated as "no override" → uses settings default (typically 3) → investigates.
+    def test_zero_override_treated_as_no_override_routes_to_investigate(self):
+        # max_cycles_override=0 is falsy, so it falls back to settings.agent_max_cycles.
+        # 0 does NOT mean "disable investigation" — it means "use the default".
+        # settings.agent_max_cycles is always >= 1, so investigation proceeds.
         insight = _make_insight_with_issues(3)
         state = {"analysis_insight": insight, "max_cycles_override": 0}
-        # 0 is falsy so falls back to settings.agent_max_cycles (≥1) → investigate
         assert route_after_initial_analysis(state) == "investigate"
 
     def test_max_cycles_override_one_allows_investigation(self):

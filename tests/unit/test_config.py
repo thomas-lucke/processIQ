@@ -76,14 +76,14 @@ class TestGetTaskConfig:
         assert isinstance(config, LLMTaskConfig)
         assert config.model is None
 
-    def test_returns_different_configs_per_task(self):
-        """Task configs are independent objects."""
+    def test_returns_independent_config_instances_per_task(self):
+        """Each task returns its own config object, not the same reference."""
         s = Settings()
         c1 = s.get_task_config(TASK_EXTRACTION)
         c2 = s.get_task_config(TASK_ANALYSIS)
-        # Both are LLMTaskConfig, but they are separate instances
         assert isinstance(c1, LLMTaskConfig)
         assert isinstance(c2, LLMTaskConfig)
+        assert c1 is not c2
 
 
 # ---------------------------------------------------------------------------

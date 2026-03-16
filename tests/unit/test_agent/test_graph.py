@@ -33,8 +33,10 @@ class TestBuildGraph:
 
 class TestCompileGraph:
     def test_returns_runnable(self):
+        from langgraph.graph.state import CompiledStateGraph
+
         app = compile_graph()
-        assert app is not None
+        assert isinstance(app, CompiledStateGraph)
 
     def test_caches_result(self):
         app1 = compile_graph()

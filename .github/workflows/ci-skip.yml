@@ -1,0 +1,28 @@
+name: CI Skip
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "src/**"
+      - "tests/**"
+      - "api/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/backend-ci.yml"
+      - "frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+      - ".github/workflows/ci-skip.yml"
+
+jobs:
+  backend-skip:
+    name: Lint, type-check, test, scan
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No backend files changed, skipping."
+
+  frontend-skip:
+    name: Lint, type-check, build
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "No frontend files changed, skipping."

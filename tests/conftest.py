@@ -207,9 +207,9 @@ def strict_constraints() -> Constraints:
     """Tight constraints for filtering tests."""
     return Constraints(
         budget_limit=5000.0,
-        cannot_hire=True,
+        no_new_hires=True,
         must_maintain_audit_trail=True,
-        max_implementation_weeks=4,
+        timeline_weeks=4,
         priority=Priority.COST_REDUCTION,
         custom_constraints=["No cloud migration"],
     )

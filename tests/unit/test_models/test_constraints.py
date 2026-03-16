@@ -18,10 +18,10 @@ class TestConstraints:
     def test_defaults(self):
         c = Constraints()
         assert c.budget_limit is None
-        assert c.cannot_hire is False
+        assert c.no_new_hires is False
         assert c.max_error_rate_increase_pct == 0.0
         assert c.must_maintain_audit_trail is False
-        assert c.max_implementation_weeks is None
+        assert c.timeline_weeks is None
         assert c.priority == Priority.COST_REDUCTION
         assert c.custom_constraints == []
 

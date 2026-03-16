@@ -639,16 +639,14 @@ def _format_constraints_for_llm(constraints: Constraints) -> str:
     if constraints.budget_limit:
         parts.append(f"Budget limit: ${constraints.budget_limit:,.0f}")
 
-    if constraints.cannot_hire:
+    if constraints.no_new_hires:
         parts.append("Cannot hire new staff")
 
     if constraints.must_maintain_audit_trail:
         parts.append("Must maintain audit trail")
 
-    if constraints.max_implementation_weeks:
-        parts.append(
-            f"Max implementation time: {constraints.max_implementation_weeks} weeks"
-        )
+    if constraints.timeline_weeks:
+        parts.append(f"Max implementation time: {constraints.timeline_weeks} weeks")
 
     if constraints.max_error_rate_increase_pct:
         parts.append(

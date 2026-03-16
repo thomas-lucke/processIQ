@@ -373,8 +373,8 @@ class TestFormatConstraintsForLlm:
         result = _format_constraints_for_llm(c)
         assert "10,000" in result
 
-    def test_cannot_hire_included(self):
-        c = Constraints(cannot_hire=True)
+    def test_no_new_hires_included(self):
+        c = Constraints(no_new_hires=True)
         result = _format_constraints_for_llm(c)
         assert "Cannot hire" in result
 
@@ -384,7 +384,7 @@ class TestFormatConstraintsForLlm:
         assert "audit trail" in result
 
     def test_max_weeks_included(self):
-        c = Constraints(max_implementation_weeks=6)
+        c = Constraints(timeline_weeks=6)
         result = _format_constraints_for_llm(c)
         assert "6 weeks" in result
 

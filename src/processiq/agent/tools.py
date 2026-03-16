@@ -125,7 +125,7 @@ def validate_root_cause(
     if constraints:
         lines.append("")
         lines.append("Active constraints (may be relevant):")
-        if constraints.cannot_hire:
+        if constraints.no_new_hires:
             lines.append("  - Cannot hire new staff")
         if constraints.must_maintain_audit_trail:
             lines.append("  - Must maintain audit trail")
@@ -160,14 +160,12 @@ def check_constraint_feasibility(
     active = []
     if constraints.budget_limit:
         active.append(f"Budget limit: ${constraints.budget_limit:,.0f}")
-    if constraints.cannot_hire:
+    if constraints.no_new_hires:
         active.append("Cannot hire new staff")
     if constraints.must_maintain_audit_trail:
         active.append("Must maintain audit trail")
-    if constraints.max_implementation_weeks:
-        active.append(
-            f"Max implementation time: {constraints.max_implementation_weeks} weeks"
-        )
+    if constraints.timeline_weeks:
+        active.append(f"Max implementation time: {constraints.timeline_weeks} weeks")
     if constraints.max_error_rate_increase_pct:
         active.append(
             f"Max error rate increase: {constraints.max_error_rate_increase_pct}%"

@@ -31,9 +31,9 @@ No issues were identified in the initial analysis. Do not call any tools — ret
 <constraints source="user_settings">
 [Do not investigate or suggest recommendations that would violate these:]
 {% if constraints.budget_limit %}- Budget limit: ${{ "{:,.0f}".format(constraints.budget_limit) }}
-{% endif %}{% if constraints.cannot_hire %}- Cannot hire new staff
+{% endif %}{% if constraints.no_new_hires %}- Cannot hire new staff
 {% endif %}{% if constraints.must_maintain_audit_trail %}- Must maintain audit trail
-{% endif %}{% if constraints.max_implementation_weeks %}- Maximum implementation time: {{ constraints.max_implementation_weeks }} weeks
+{% endif %}{% if constraints.timeline_weeks %}- Maximum implementation time: {{ constraints.timeline_weeks }} weeks
 {% endif %}{% if constraints.max_error_rate_increase_pct %}- Maximum acceptable error rate increase: {{ constraints.max_error_rate_increase_pct }}%
 {% endif %}{% if constraints.custom_constraints %}{% for c in constraints.custom_constraints %}- {{ c }}
 {% endfor %}{% endif %}

@@ -182,14 +182,14 @@ def _score_constraints(
     else:
         suggestions.append("Consider adding a budget limit for better filtering")
 
-    if constraints.max_implementation_weeks is not None:
+    if constraints.timeline_weeks is not None:
         score += 0.15
 
     if constraints.custom_constraints:
         score += 0.1
 
     # Having any boolean constraints set is good
-    if constraints.cannot_hire or constraints.must_maintain_audit_trail:
+    if constraints.no_new_hires or constraints.must_maintain_audit_trail:
         score += 0.1
 
     return min(score, 1.0)

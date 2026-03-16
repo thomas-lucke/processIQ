@@ -369,7 +369,7 @@ export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>
           type="file"
           ref={fileInputRef}
           className="hidden"
-          accept=".csv,.xlsx,.xls,.pdf,.docx"
+          accept=".csv,.xlsx,.xls,.pdf,.docx,.doc,.ppt,.pptx,.html,.htm,.jpg,.jpeg,.png,.bmp,.tiff"
           onChange={(e) => { const file = e.target.files?.[0]; if (file) handleFileUpload(file); e.target.value = ""; }}
         />
         <input

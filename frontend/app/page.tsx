@@ -263,7 +263,7 @@ export default function HomePage() {
 
           {/* Library view — kept mounted to avoid losing chat state when switching tabs */}
           <div className={activeNav === "library" ? "flex-1 overflow-hidden" : "hidden"}>
-            <LibraryPanel />
+            <LibraryPanel isActive={activeNav === "library"} />
           </div>
 
           {/* Analyze view — kept mounted so ChatInterface state survives tab switches */}

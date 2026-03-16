@@ -25,6 +25,11 @@
     "lucide-react": "^0.400.0",
     "tailwind-merge": "^2.4.0"
   },
+  "pnpm": {
+    "overrides": {
+      "flatted": ">=3.4.0"
+    }
+  },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@types/react": "^19.0.0",

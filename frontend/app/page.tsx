@@ -9,6 +9,7 @@ import type {
   GraphSchema,
   ProcessData,
 } from "@/lib/types";
+import type { ChatInterfaceHandle } from "@/components/chat/ChatInterface";
 import { deleteUserData, getProfile, healthCheck, saveProfile } from "@/lib/api";
 import { SettingsDrawer } from "@/components/settings/SettingsDrawer";
 import { Header } from "@/components/layout/Header";
@@ -81,6 +82,7 @@ export default function HomePage() {
 
   // Track whether the profile has been loaded from the server (to avoid saving before loading)
   const profileLoadedRef = useRef(false);
+  const chatRef = useRef<ChatInterfaceHandle>(null);
 
   // Fetch app config on mount
   useEffect(() => {
@@ -299,6 +301,7 @@ export default function HomePage() {
                     }}
                   >
                     <ChatInterface
+                      ref={chatRef}
                       key={chatKey}
                       constraints={constraints}
                       profile={profile}
@@ -323,7 +326,7 @@ export default function HomePage() {
                         padding: hasResults ? "0 16px" : "0 24px",
                       }}
                     >
-                      <ProcessStepsTable processData={processData} onChange={setProcessData} />
+                      <ProcessStepsTable processData={processData} onChange={setProcessData} onEstimate={() => chatRef.current?.triggerEstimate()} />
                     </div>
                   )}
                 </div>

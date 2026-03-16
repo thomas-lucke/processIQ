@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { analyzeProcess, extractFile, extractText } from "@/lib/api";
 import type {
   AnalysisInsight,
@@ -139,7 +139,11 @@ function ProcessBuildingIndicator({ processName }: { processName: string }) {
   );
 }
 
-export function ChatInterface({
+export interface ChatInterfaceHandle {
+  triggerEstimate: () => void;
+}
+
+export const ChatInterface = forwardRef<ChatInterfaceHandle, ChatInterfaceProps>(function ChatInterface({
   constraints,
   profile,
   analysisMode,
@@ -149,7 +153,7 @@ export function ChatInterface({
   currentProcessData,
   onProcessExtracted,
   onAnalysisComplete,
-}: ChatInterfaceProps) {
+}: ChatInterfaceProps, ref: React.Ref<ChatInterfaceHandle>) {
   const [messages, setMessages] = useState<ChatMessage[]>([{
     role: "assistant",
     content: "Describe your business process - the steps involved, roughly how long each takes, and any dependencies between them. You can also upload a file: PDF, Word document, Excel, CSV, PowerPoint, or image.",
@@ -276,6 +280,10 @@ export function ChatInterface({
     if (pendingProcessData && !isLoading) runAnalysis(pendingProcessData);
   }, [pendingProcessData, isLoading, runAnalysis]);
 
+  useImperativeHandle(ref, () => ({
+    triggerEstimate: () => handleTextSubmit("estimate missing values"),
+  }), [handleTextSubmit]);
+
   return (
     <div
       className={cn(
@@ -391,4 +399,4 @@ export function ChatInterface({
       </p>
     </div>
   );
-}
+});

@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 interface ProcessStepsTableProps {
   processData: ProcessData;
   onChange?: (updated: ProcessData) => void;
+  onEstimate?: () => void;
 }
 
 type EditingCell = { rowIndex: number; field: keyof ProcessStep } | null;
@@ -101,7 +102,7 @@ function EditableCell({
   );
 }
 
-export function ProcessStepsTable({ processData, onChange }: ProcessStepsTableProps) {
+export function ProcessStepsTable({ processData, onChange, onEstimate }: ProcessStepsTableProps) {
   const [editingCell, setEditingCell] = useState<EditingCell>(null);
   const [localSteps, setLocalSteps] = useState<ProcessStep[]>(processData.steps);
 
@@ -145,7 +146,18 @@ export function ProcessStepsTable({ processData, onChange }: ProcessStepsTablePr
     <div className="space-y-1">
       <div className="flex items-center justify-between px-1">
         <p className="text-xs font-semibold text-ink-muted uppercase tracking-wide">Process Steps</p>
-        <p className="text-xs text-ink-faint">{localSteps.length} steps · {formatTime(totalTime)} total</p>
+        <div className="flex items-center gap-3">
+          {onEstimate && (
+            <button
+              onClick={onEstimate}
+              title="Ask the AI to estimate any blank or zero fields based on process context"
+              className="text-xs text-ink-faint hover:text-ink-muted border border-dark-border hover:border-ink-faint rounded px-2 py-0.5 transition-colors"
+            >
+              Estimate missing values
+            </button>
+          )}
+          <p className="text-xs text-ink-faint">{localSteps.length} steps · {formatTime(totalTime)} total</p>
+        </div>
       </div>
 
       <div className="border border-dark-border rounded-xl overflow-hidden">

@@ -1,28 +1,51 @@
 name: CI Skip
 
+# Provides passing no-op jobs that satisfy required branch-protection checks
+# when the real CI workflows don't run (because their path filters didn't match).
+#
+# Strategy: always run on PRs, check changed files via the GH API, and only
+# emit a "success" step when the corresponding real CI would NOT have run.
+
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "src/**"
-      - "tests/**"
-      - "api/**"
-      - "pyproject.toml"
-      - "uv.lock"
-      - ".github/workflows/backend-ci.yml"
-      - "frontend/**"
-      - ".github/workflows/frontend-ci.yml"
-      - ".github/workflows/ci-skip.yml"
 
 jobs:
+  check-changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - "src/**"
+              - "tests/**"
+              - "api/**"
+              - "pyproject.toml"
+              - "uv.lock"
+              - ".github/workflows/backend-ci.yml"
+            frontend:
+              - "frontend/**"
+              - ".github/workflows/frontend-ci.yml"
+
   backend-skip:
     name: Lint, type-check, test, scan
+    needs: check-changes
+    if: needs.check-changes.outputs.backend == 'false'
     runs-on: ubuntu-latest
     steps:
       - run: echo "No backend files changed, skipping."
 
   frontend-skip:
     name: Lint, type-check, build
+    needs: check-changes
+    if: needs.check-changes.outputs.frontend == 'false'
     runs-on: ubuntu-latest
     steps:
       - run: echo "No frontend files changed, skipping."

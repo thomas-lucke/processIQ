@@ -36,6 +36,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "chromadb>=1.4.1",
     "docling>=2.71.0",
+    "pillow>=12.1.1",               # security floor: CVE out-of-bounds write fix
     "weasyprint>=62.0",
 ]
 

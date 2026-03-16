@@ -4,6 +4,7 @@
  */
 
 import type {
+  AnalysisInsight,
   AnalyzeRequest,
   AnalyzeResponse,
   BusinessProfile,
@@ -14,6 +15,7 @@ import type {
   FeedbackRequest,
   FeedbackResponse,
   GraphSchema,
+  ProcessData,
   ProfileResponse,
   SessionsResponse,
 } from "./types";
@@ -179,4 +181,49 @@ export async function submitFeedback(
 export async function getUserSessions(): Promise<SessionsResponse> {
   const userId = getUserId();
   return apiFetch<SessionsResponse>(`/sessions/${userId}`, { method: "GET" });
+}
+
+// ---------------------------------------------------------------------------
+// Export
+// ---------------------------------------------------------------------------
+
+/**
+ * Request a PDF export from the backend and return the blob.
+ * The PDF is rendered server-side by WeasyPrint (vector, selectable text).
+ */
+export async function exportPdf(
+  insight: AnalysisInsight,
+  processData: ProcessData | null | undefined
+): Promise<Blob> {
+  const userId = getUserId();
+  const res = await fetch(`${API_BASE}/export/pdf`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(userId ? { "X-User-Id": userId } : {}),
+    },
+    body: JSON.stringify({ insight, process_data: processData ?? null }),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${detail}`);
+  }
+  return res.blob();
+}
+
+/**
+ * Request a CSV export for a session from the backend.
+ * Requires an active session (thread_id) with a completed analysis.
+ */
+export async function exportCsv(threadId: string): Promise<Blob> {
+  const userId = getUserId();
+  const res = await fetch(`${API_BASE}/export/csv/${threadId}`, {
+    method: "GET",
+    headers: userId ? { "X-User-Id": userId } : {},
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`API ${res.status}: ${detail}`);
+  }
+  return res.blob();
 }

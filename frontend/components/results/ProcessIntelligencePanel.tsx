@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import type { AnalysisInsight, GraphSchema, Issue, ProcessData, Recommendation, RuledOutOption } from "@/lib/types";
-import { submitFeedback } from "@/lib/api";
+import { submitFeedback, exportPdf } from "@/lib/api";
 
 const ProcessGraph = dynamic(
   () => import("@/components/visualization/ProcessGraph").then((m) => m.ProcessGraph),
@@ -34,9 +34,9 @@ function SeverityBadge({ severity }: { severity: Issue["severity"] }) {
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold",
-      severity === "high" && "bg-red-950 text-red-400",
-      severity === "medium" && "bg-orange-950 text-orange-400",
-      severity === "low" && "bg-yellow-950 text-yellow-500",
+      severity === "high" && "bg-red-100 text-red-700",
+      severity === "medium" && "bg-orange-100 text-orange-700",
+      severity === "low" && "bg-yellow-100 text-yellow-700",
     )}>
       {severity === "high" ? "High" : severity === "medium" ? "Medium" : "Low"}
     </span>
@@ -47,13 +47,13 @@ function ConfidenceBadge({ level }: { level: "high" | "medium" | "low" }) {
   return (
     <span className={cn(
       "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
-      level === "high" && "bg-emerald-950 text-emerald-400 ring-1 ring-emerald-800",
-      level === "medium" && "bg-amber-950 text-amber-400 ring-1 ring-amber-800",
+      level === "high" && "bg-green-100 text-green-700 ring-1 ring-green-300",
+      level === "medium" && "bg-amber-100 text-amber-700 ring-1 ring-amber-300",
       level === "low" && "bg-dark-card text-ink-muted ring-1 ring-dark-border",
     )}>
       <span className={cn("w-1.5 h-1.5 rounded-full",
-        level === "high" && "bg-emerald-400",
-        level === "medium" && "bg-amber-400",
+        level === "high" && "bg-green-600",
+        level === "medium" && "bg-amber-600",
         level === "low" && "bg-ink-faint",
       )} />
       {level === "high" ? "High confidence" : level === "medium" ? "Medium" : "Needs validation"}
@@ -65,9 +65,9 @@ function FeasibilityBadge({ feasibility }: { feasibility: Recommendation["feasib
   return (
     <span className={cn(
       "inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold",
-      feasibility === "easy" && "bg-emerald-950 text-emerald-400",
+      feasibility === "easy" && "bg-green-100 text-green-700",
       feasibility === "moderate" && "bg-accent-muted text-accent",
-      feasibility === "complex" && "bg-purple-950 text-purple-400",
+      feasibility === "complex" && "bg-purple-100 text-purple-700",
     )}>
       {feasibility === "easy" ? "Easy" : feasibility === "moderate" ? "Moderate" : "Complex"}
     </span>
@@ -234,19 +234,19 @@ function OverviewTab({
   const healthConfig = {
     critical: {
       border: "border-status-danger/40",
-      bg: "bg-red-950/20",
+      bg: "bg-red-50",
       text: "text-status-danger",
       label: "Critical Issues Found",
     },
     "at-risk": {
       border: "border-status-warning/40",
-      bg: "bg-amber-950/20",
+      bg: "bg-amber-50",
       text: "text-status-warning",
       label: "Improvement Opportunities",
     },
     healthy: {
       border: "border-status-success/40",
-      bg: "bg-emerald-950/20",
+      bg: "bg-green-50",
       text: "text-status-success",
       label: "Process Is Healthy",
     },
@@ -536,7 +536,7 @@ function RecommendationCard({
   return (
     <div className={cn(
       "bg-dark-card border rounded-xl px-4 py-4 space-y-2.5 transition-colors",
-      state.rating === "helpful" && "border-emerald-800/60",
+      state.rating === "helpful" && "border-green-400",
       state.rating === "not_helpful" && "border-dark-border opacity-75",
       state.rating === null && "border-dark-border",
     )}>
@@ -607,7 +607,7 @@ function RecommendationCard({
           {rec.risks && rec.risks.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-ink-muted mb-1 uppercase tracking-wide">Risks</p>
-              <ul className="list-disc ml-4 space-y-0.5 text-xs text-orange-400">
+              <ul className="list-disc ml-4 space-y-0.5 text-xs text-orange-700">
                 {rec.risks.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
             </div>
@@ -638,7 +638,7 @@ function RecommendationCard({
           className={cn(
             "text-xs px-3 py-1.5 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
             state.rating === "helpful"
-              ? "bg-emerald-950 border-emerald-700 text-emerald-400 font-semibold"
+              ? "bg-green-100 border-green-400 text-green-700 font-semibold"
               : "border-dark-border text-ink-muted hover:bg-dark-hover",
           )}
         >
@@ -649,7 +649,7 @@ function RecommendationCard({
           className={cn(
             "text-xs px-3 py-1.5 rounded-lg border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent",
             state.rating === "not_helpful"
-              ? "bg-red-950 border-red-800 text-red-400 font-semibold"
+              ? "bg-red-100 border-red-400 text-red-700 font-semibold"
               : "border-dark-border text-ink-muted hover:bg-dark-hover",
           )}
         >
@@ -666,7 +666,7 @@ function RecommendationCard({
 
       {/* Reason picker — shown when "Not helpful" is selected and reason not yet submitted */}
       {state.rating === "not_helpful" && !state.reasonSubmitted && (
-        <div className="ml-8 rounded-lg border border-red-900/40 bg-red-950/20 px-3 py-3 space-y-2">
+        <div className="ml-8 rounded-lg border border-red-200 bg-red-50 px-3 py-3 space-y-2">
           <p className="text-xs font-medium text-ink-muted">Help us improve — why wasn&apos;t this helpful?</p>
           <div className="flex flex-wrap gap-1.5">
             {NOT_HELPFUL_REASONS.map((reason) => (
@@ -1084,14 +1084,28 @@ function buildProposalMarkdown(insight: AnalysisInsight, processData: ProcessDat
   return lines.join("\n");
 }
 
-function downloadMarkdown(content: string, filename: string): void {
-  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function downloadMarkdown(content: string, filename: string): void {
+  triggerDownload(new Blob([content], { type: "text/markdown;charset=utf-8" }), filename);
+}
+
+function downloadText(content: string, filename: string): void {
+  // Strip markdown syntax for plain-text output
+  const plain = content
+    .replace(/^#{1,6}\s+/gm, "")       // headings
+    .replace(/\*\*(.+?)\*\*/g, "$1")   // bold
+    .replace(/\*(.+?)\*/g, "$1")       // italic
+    .replace(/^[-*]\s+/gm, "- ")       // list bullets (normalise)
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"); // links
+  triggerDownload(new Blob([plain], { type: "text/plain;charset=utf-8" }), filename);
 }
 
 // ---------------------------------------------------------------------------
@@ -1118,6 +1132,8 @@ export function ProcessIntelligencePanel({
   onHighlightSteps,
 }: ProcessIntelligencePanelProps) {
   const [activeTab, setActiveTab] = useState<TabId>("overview");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   // Recommendation feedback state — lifted here so tab switches don't reset it.
   const recs = insight.recommendations ?? [];
@@ -1195,23 +1211,92 @@ export function ProcessIntelligencePanel({
               </button>
             ))}
           </div>
-          {/* Export button */}
-          <button
-            onClick={() => {
-              const md = buildProposalMarkdown(insight, processData);
-              const slug = (processData?.name ?? "proposal").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-              downloadMarkdown(md, `${slug}-improvement-proposal.md`);
-            }}
-            className="mb-0.5 flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink px-2 py-1.5 rounded-md hover:bg-dark-hover transition-colors border border-transparent hover:border-dark-border"
-            title="Download improvement proposal as Markdown"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Export
-          </button>
+          {/* Export dropdown */}
+          <div className="relative mb-0.5">
+            <button
+              onClick={() => setExportOpen((v) => !v)}
+              className="flex items-center gap-1.5 text-xs text-ink-faint hover:text-ink px-2 py-1.5 rounded-md hover:bg-dark-hover transition-colors border border-transparent hover:border-dark-border"
+              aria-haspopup="true"
+              aria-expanded={exportOpen}
+              disabled={exportLoading}
+            >
+              {exportLoading ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+                </svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              )}
+              Export
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+
+            {exportOpen && (
+              <>
+                {/* Click-outside overlay */}
+                <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} aria-hidden="true" />
+                <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-md border border-dark-border bg-dark-card shadow-lg py-1" role="menu">
+                  {/* Markdown */}
+                  <button
+                    role="menuitem"
+                    className="w-full text-left px-3 py-1.5 text-xs text-ink-faint hover:text-ink hover:bg-dark-hover transition-colors flex items-center gap-2"
+                    onClick={() => {
+                      const md = buildProposalMarkdown(insight, processData);
+                      const slug = (processData?.name ?? "proposal").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+                      downloadMarkdown(md, `${slug}-improvement-proposal.md`);
+                      setExportOpen(false);
+                    }}
+                  >
+                    <span className="w-8 text-center font-mono text-[10px] text-ink-muted">.md</span>
+                    Markdown
+                  </button>
+
+                  {/* Plain text */}
+                  <button
+                    role="menuitem"
+                    className="w-full text-left px-3 py-1.5 text-xs text-ink-faint hover:text-ink hover:bg-dark-hover transition-colors flex items-center gap-2"
+                    onClick={() => {
+                      const md = buildProposalMarkdown(insight, processData);
+                      const slug = (processData?.name ?? "proposal").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+                      downloadText(md, `${slug}-improvement-proposal.txt`);
+                      setExportOpen(false);
+                    }}
+                  >
+                    <span className="w-8 text-center font-mono text-[10px] text-ink-muted">.txt</span>
+                    Plain text
+                  </button>
+
+                  {/* PDF */}
+                  <button
+                    role="menuitem"
+                    className="w-full text-left px-3 py-1.5 text-xs text-ink-faint hover:text-ink hover:bg-dark-hover transition-colors flex items-center gap-2"
+                    onClick={async () => {
+                      setExportOpen(false);
+                      setExportLoading(true);
+                      try {
+                        const blob = await exportPdf(insight, processData);
+                        const slug = (processData?.name ?? "proposal").toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+                        triggerDownload(blob, `${slug}-improvement-proposal.pdf`);
+                      } catch (err) {
+                        console.error("PDF export failed:", err);
+                      } finally {
+                        setExportLoading(false);
+                      }
+                    }}
+                  >
+                    <span className="w-8 text-center font-mono text-[10px] text-ink-muted">.pdf</span>
+                    PDF report
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

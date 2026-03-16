@@ -36,6 +36,7 @@ dependencies = [
     "slowapi>=0.1.9",
     "chromadb>=1.4.1",
     "docling>=2.71.0",
+    "weasyprint>=62.0",
 ]
 
 [dependency-groups]

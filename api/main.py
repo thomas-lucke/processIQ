@@ -18,6 +18,7 @@ from typing import Annotated, Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -28,6 +29,7 @@ from api.schemas import (
     AnalyzeResponse,
     ContinueRequest,
     ContinueResponse,
+    ExportPdfRequest,
     ExtractResponse,
     ExtractTextRequest,
     FeedbackRequest,
@@ -40,6 +42,8 @@ from processiq.agent import interface
 from processiq.agent.interface import SUPPORTED_EXTENSIONS
 from processiq.analysis.visualization import GraphSchema, build_graph_schema
 from processiq.config import settings
+from processiq.export.csv_export import export_insight_csv
+from processiq.export.pdf_export import render_proposal_pdf
 from processiq.logging_config import setup_logging
 from processiq.models import BusinessProfile
 from processiq.persistence.analysis_store import (
@@ -449,3 +453,67 @@ async def post_feedback(
     if body.rejected and body.user_id:
         update_rejected_approaches(body.user_id, body.rejected)
     return FeedbackResponse()
+
+
+# ---------------------------------------------------------------------------
+# Export endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/export/pdf")
+@limiter.limit("10/minute")
+async def export_pdf(request: Request, body: ExportPdfRequest) -> Response:
+    """Render the improvement proposal as a PDF and return the bytes."""
+    logger.info(
+        "POST /export/pdf — process=%s",
+        body.process_data.name if body.process_data else "unknown",
+    )
+    pdf_bytes = render_proposal_pdf(
+        insight=body.insight,
+        process_data=body.process_data,
+    )
+    slug = ""
+    if body.process_data:
+        import re
+
+        slug = re.sub(
+            r"[^a-z0-9-]", "", body.process_data.name.lower().replace(" ", "-")
+        )
+    filename = (
+        f"{slug}-improvement-proposal.pdf" if slug else "improvement-proposal.pdf"
+    )
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@app.get("/export/csv/{thread_id}")
+async def export_csv(thread_id: str) -> Response:
+    """Export the analysis for a session as CSV."""
+    logger.info("GET /export/csv/%s", thread_id[:8])
+    session = _session_store.get(thread_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No analysis found for thread '{thread_id}'. Run /analyze first.",
+        )
+    insight = session.get("insight")
+    if insight is None:
+        raise HTTPException(status_code=404, detail="No analysis insight in session.")
+
+    process = session.get("process")
+    slug = ""
+    if process:
+        import re
+
+        slug = re.sub(r"[^a-z0-9-]", "", process.name.lower().replace(" ", "-"))
+    filename = f"{slug}-analysis.csv" if slug else "analysis.csv"
+
+    csv_bytes = export_insight_csv(insight)
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

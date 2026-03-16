@@ -48,9 +48,11 @@ export interface Constraints {
   budget_limit?: number | null;
   no_layoffs?: boolean;
   no_new_hires?: boolean;
+  must_maintain_audit_trail?: boolean;
   regulatory_requirements?: string[];
   timeline_weeks?: number | null;
   technology_restrictions?: string[];
+  max_error_rate_increase_pct?: number;
   custom_constraints?: string[];
 }
 

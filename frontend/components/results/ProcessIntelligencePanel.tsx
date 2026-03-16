@@ -234,19 +234,19 @@ function OverviewTab({
   const healthConfig = {
     critical: {
       border: "border-status-danger/40",
-      bg: "bg-red-50",
+      bg: "bg-red-950/30",
       text: "text-status-danger",
       label: "Critical Issues Found",
     },
     "at-risk": {
       border: "border-status-warning/40",
-      bg: "bg-amber-50",
+      bg: "bg-amber-950/30",
       text: "text-status-warning",
       label: "Improvement Opportunities",
     },
     healthy: {
       border: "border-status-success/40",
-      bg: "bg-green-50",
+      bg: "bg-green-950/30",
       text: "text-status-success",
       label: "Process Is Healthy",
     },

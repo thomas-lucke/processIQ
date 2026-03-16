@@ -13,7 +13,6 @@ Design principles:
 import logging
 import re
 import uuid
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
@@ -93,9 +92,6 @@ class AgentResponse:
     # Post-extraction improvement suggestions (when llm_explanations_enabled=True)
     # This is a user-friendly message about what would improve analysis accuracy
     improvement_suggestions: str | None = None
-
-    # Draft analysis preview (shown before confirmation, Phase 3 Task 3.3)
-    draft_insight: AnalysisInsight | None = None
 
     # Debugging/transparency
     reasoning_trace: list[str] = field(default_factory=list)
@@ -206,118 +202,6 @@ def _generate_improvement_suggestions(
     except Exception as e:
         logger.warning("Failed to generate improvement suggestions: %s", e)
         return None
-
-
-def _generate_draft_analysis(
-    process_data: ProcessData,
-    confidence: ConfidenceResult,
-    analysis_mode: str | None = None,
-    llm_provider: str | None = None,
-) -> AnalysisInsight | None:
-    """Generate a quick draft analysis for preview before confirmation.
-
-    Only runs when confidence >= 0.5 (enough data to be useful).
-    Uses the same analysis pipeline as full analysis but is labeled as draft.
-
-    Args:
-        process_data: The extracted process data.
-        confidence: The calculated confidence result.
-        analysis_mode: Optional analysis mode preset.
-        llm_provider: Optional LLM provider override.
-
-    Returns:
-        AnalysisInsight if draft could be generated, None otherwise.
-    """
-    if confidence.score < 0.5:
-        logger.debug(
-            "Skipping draft analysis: confidence %.2f < 0.5 threshold",
-            confidence.score,
-        )
-        return None
-
-    if not settings.llm_explanations_enabled:
-        logger.debug("LLM explanations disabled, skipping draft analysis")
-        return None
-
-    try:
-        from processiq.agent.nodes import _run_llm_analysis
-        from processiq.analysis.metrics import (
-            calculate_process_metrics,
-            format_metrics_for_llm,
-        )
-
-        metrics = calculate_process_metrics(process_data)
-        metrics_text = format_metrics_for_llm(metrics, process_data)
-
-        logger.info("Generating draft analysis for: %s", process_data.name)
-        insight = _run_llm_analysis(
-            metrics_text=metrics_text,
-            analysis_mode=analysis_mode,
-            llm_provider=llm_provider,
-        )
-
-        if insight:
-            logger.info(
-                "Draft analysis: %d issues, %d recommendations",
-                len(insight.issues),
-                len(insight.recommendations),
-            )
-        return insight
-
-    except Exception as e:
-        logger.warning("Draft analysis failed (non-critical): %s", e)
-        return None
-
-
-def _generate_post_extraction_extras(
-    process_data: ProcessData,
-    confidence: ConfidenceResult,
-    analysis_mode: str | None = None,
-    llm_provider: str | None = None,
-    business_context: str | None = None,
-) -> tuple[str | None, AnalysisInsight | None]:
-    """Generate improvement suggestions and draft analysis in parallel.
-
-    These two LLM calls are independent of each other, so we run them
-    concurrently to reduce post-extraction latency.
-
-    Returns:
-        Tuple of (improvement_suggestions, draft_insight).
-    """
-    improvement_suggestions: str | None = None
-    draft_insight: AnalysisInsight | None = None
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures: dict[Future[Any], str] = {
-            executor.submit(
-                _generate_improvement_suggestions,
-                process_data,
-                confidence,
-                analysis_mode,
-                llm_provider,
-                business_context,
-            ): "suggestions",
-            executor.submit(
-                _generate_draft_analysis,
-                process_data,
-                confidence,
-                analysis_mode,
-                llm_provider,
-            ): "draft",
-        }
-
-        for future in as_completed(futures):
-            label = futures[future]
-            try:
-                result = future.result()
-                if label == "suggestions":
-                    improvement_suggestions = result
-                else:
-                    draft_insight = result
-            except Exception as e:
-                logger.warning("Post-extraction %s failed: %s", label, e)
-
-    return improvement_suggestions, draft_insight
 
 
 def analyze_process(
@@ -673,10 +557,10 @@ def extract_from_text(
             process_data, constraints=constraints, profile=profile
         )
 
-        # Generate improvement suggestions + draft analysis in parallel
+        # Generate improvement suggestions
         from processiq.agent.nodes import _format_business_context_for_llm
 
-        improvement_suggestions, draft_insight = _generate_post_extraction_extras(
+        improvement_suggestions = _generate_improvement_suggestions(
             process_data,
             confidence,
             analysis_mode=analysis_mode,
@@ -697,7 +581,6 @@ def extract_from_text(
             extraction_result=extraction_result,
             confidence=confidence,
             improvement_suggestions=improvement_suggestions,
-            draft_insight=draft_insight,
             needs_input=True,  # User should confirm extraction
             suggested_questions=_generate_targeted_questions(process_data, confidence),
         )
@@ -934,8 +817,8 @@ def extract_from_file(
         process_data, constraints=constraints, profile=profile
     )
 
-    # Generate improvement suggestions + draft analysis in parallel
-    improvement_suggestions, draft_insight = _generate_post_extraction_extras(
+    # Generate improvement suggestions
+    improvement_suggestions = _generate_improvement_suggestions(
         process_data,
         confidence,
         analysis_mode=analysis_mode,
@@ -958,7 +841,6 @@ def extract_from_file(
         extraction_result=extraction_result,
         confidence=confidence,
         improvement_suggestions=improvement_suggestions,
-        draft_insight=draft_insight,
         needs_input=True,  # User should confirm extraction
         suggested_questions=_generate_targeted_questions(process_data, confidence),
     )

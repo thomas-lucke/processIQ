@@ -378,7 +378,7 @@ cd processiq
 uv sync --group dev
 cp .env.example .env
 # Edit .env — add your OPENAI_API_KEY or ANTHROPIC_API_KEY
-uvicorn api.main:app --reload
+uv run uvicorn api.main:app --reload
 # API docs: http://localhost:8000/docs
 ```
 

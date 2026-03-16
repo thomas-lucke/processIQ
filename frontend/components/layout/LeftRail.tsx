@@ -56,9 +56,9 @@ function IconChevronRight() {
 function IconMark({ size = 24 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <rect x="2" y="6" width="8" height="6" rx="1.5" fill="#19b7c0" opacity="0.9" />
-      <rect x="14" y="12" width="8" height="6" rx="1.5" fill="#22d3ee" opacity="0.7" />
-      <line x1="10" y1="9" x2="14" y2="15" stroke="#19b7c0" strokeWidth="1.5" strokeDasharray="2 2" />
+      <rect x="2" y="6" width="8" height="6" rx="1.5" fill="#5a6272" opacity="0.9" />
+      <rect x="14" y="12" width="8" height="6" rx="1.5" fill="#3d4450" opacity="0.7" />
+      <line x1="10" y1="9" x2="14" y2="15" stroke="#5a6272" strokeWidth="1.5" strokeDasharray="2 2" />
     </svg>
   );
 }

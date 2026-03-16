@@ -6,19 +6,19 @@
 
 @layer base {
   :root {
-    --page-bg: #080c14;
-    --surface: #0f1623;
-    --card: #141d2e;
-    --border: #1e2d45;
-    --hover: #192236;
-    --accent: #19b7c0;
-    --accent-strong: #22d3ee;
-    --text: #e2e8f0;
-    --muted: #7a91b0;
-    --faint: #3d5270;
-    --success: #22c55e;
-    --warning: #f59e0b;
-    --danger: #ef4444;
+    --page-bg: #1a1c22;
+    --surface: #20232b;
+    --card: #252830;
+    --border: #2e3140;
+    --hover: #2a2d38;
+    --accent: #7b8cde;
+    --accent-strong: #a0aaf0;
+    --text: #e8eaf2;
+    --muted: #8b91a8;
+    --faint: #565c73;
+    --success: #16a34a;
+    --warning: #c2410c;
+    --danger: #dc2626;
   }
 
   body {
@@ -38,17 +38,17 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    background: #1e2d45;
+    background: #2e3140;
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: #2a3f5e;
+    background: #3a3f54;
   }
 
   /* Native select / option dark styling */
   select option {
-    background: #0f1623;
-    color: #e2e8f0;
+    background: #20232b;
+    color: #e8eaf2;
   }
 
   /* Focus visible outline */
@@ -62,7 +62,7 @@
    Dot-grid background texture (Phase 1 main area)
 ------------------------------------------------------------------------ */
 .dot-grid-bg {
-  background-image: radial-gradient(circle, rgba(30, 45, 69, 0.6) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(60, 68, 90, 0.8) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
@@ -117,23 +117,23 @@
 }
 
 .react-flow__background {
-  background-color: #0f1623 !important;
+  background-color: #1a1c22 !important;
 }
 
 .react-flow__controls {
-  background: #141d2e !important;
-  border: 1px solid #1e2d45 !important;
+  background: #252830 !important;
+  border: 1px solid #2e3140 !important;
   border-radius: 8px !important;
   overflow: hidden;
 }
 
 .react-flow__controls-button {
-  background: #141d2e !important;
-  border-bottom: 1px solid #1e2d45 !important;
-  color: #7a91b0 !important;
-  fill: #7a91b0 !important;
+  background: #252830 !important;
+  border-bottom: 1px solid #2e3140 !important;
+  color: #8b91a8 !important;
+  fill: #8b91a8 !important;
 }
 
 .react-flow__controls-button:hover {
-  background: #192236 !important;
+  background: #2a2d38 !important;
 }

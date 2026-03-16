@@ -4,87 +4,49 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ---
 
+## 2026-03-13
+
+### CODE: Export dropdown — `.md`, `.txt`, and PDF
+
+- Replaced single Export button with a three-option dropdown
+- `.txt` strips markdown syntax client-side before download
+- PDF rendered server-side via WeasyPrint (`POST /export/pdf`); produces vector PDF with selectable text; `weasyprint>=62.0` added
+- `GET /export/csv/{thread_id}` wired to existing `csv_export.py` (API only, not in UI)
+
+### FIX: Constraints field name mismatch between Python and TypeScript — renamed `cannot_hire`/`max_implementation_weeks` to `no_new_hires`/`no_layoffs`/`timeline_weeks`; kept old names as computed properties for internal compatibility.
+
+### DESIGN: UI theme overhaul —  light gray surfaces (`#f0f2f5`) with neutral gray accent (`#5a6272`). All badges, graph, minimap, and status colors updated for both passes.
+
+## 2026-03-13
+
+### FIX: Removed dead draft analysis code — `_generate_draft_analysis` and `_generate_post_extraction_extras` deleted from `interface.py`; result was never sent to the frontend. Extracted latency reduced by ~60s.
+### FIX: Anthropic model IDs updated — `claude-sonnet-4-5-20250929` → `claude-sonnet-4-6` in `model_presets.py`.
+### CODE: Added entry log to `_run_llm_analysis` to close the 2-minute silent window during structured-output calls.
+
+---
+
 ## 2026-03-12
 
-### ARCHITECTURE: CI/CD pipeline with GitHub Actions, security scanning, and pre-commit hooks
-
-- `backend-ci.yml`: ruff → mypy → pytest (non-LLM) with coverage → bandit → detect-secrets baseline diff → Codecov upload. Path-filtered to backend files only. Concurrency block cancels outdated runs.
-- `frontend-ci.yml`: pnpm install → ESLint → `tsc --noEmit` → `pnpm build`. Path-filtered to `frontend/`. Concurrency block.
-- `bandit` and `detect-secrets` added as dev dependencies; `.secrets.baseline` committed (lock files excluded from scan).
-- `.pre-commit-config.yaml` version pins updated to ruff v0.9.10 / mypy v1.15.0.
-- Fixed 4 stale test references broken by prior refactors (`analyze_with_llm_node` rename, `is_likely_edit_request` removal, `memory_synthesis` node addition, `estimated_fields` auto-population). All 408 non-LLM tests now pass.
-
-### ARCHITECTURE: Removed Streamlit UI — `src/processiq/ui/` and `app.py` deleted; FastAPI + Next.js is the only frontend.
-
-### FIX: Cross-session feedback loop now fully wired — thumbs-down on a recommendation persists to `business_profiles.rejected_approaches`, which feeds into future analyses via `system.j2` and `investigation_system.j2`. Previously only `analysis_sessions` was updated. Also added FastAPI lifespan handler to close the SQLite connection on shutdown.
+### ARCHITECTURE: CI/CD — GitHub Actions backend (ruff → mypy → pytest → bandit → detect-secrets) and frontend (ESLint → tsc → build) pipelines; `bandit` and `detect-secrets` added as dev deps; pre-commit pins updated.
+### ARCHITECTURE: Removed Streamlit UI — `src/processiq/ui/` and `app.py` deleted.
+### FIX: Cross-session feedback loop fully wired — rejected recommendations now persist to `business_profiles.rejected_approaches` and feed future analyses. Added FastAPI lifespan handler for SQLite shutdown.
 
 ---
 
-## 2026-03-11 (Responsible AI + ADRs)
+## 2026-03-11
 
-### DESIGN: Responsible AI review and security documentation
-
-- Added `docs/responsible-ai.md` (risk review, mitigations, security threat model, prompt injection section) and `docs/system-card.md` (intended use, limits, data handling).
-- Added "Not for personnel evaluation" disclaimer to export section in the UI.
-- Added Prompt Injection Resistance section covering the uploaded-document attack surface and architectural mitigations.
-- Added Security Threat Model section covering API key exposure, unencrypted SQLite, and LangSmith trace privacy.
-- Rate limiting correctly scoped as a planned improvement pending deployment (not yet implemented).
-
-### ARCHITECTURE: Architecture Decision Records (ADRs)
-
-- Created `docs/decisions/` with four ADRs: LangGraph for orchestration, ChromaDB for vector storage, LLM provider factory abstraction, FastAPI + Next.js over Streamlit.
+### DESIGN: Added `docs/responsible-ai.md` and `docs/system-card.md`; prompt injection section, security threat model, "not for personnel evaluation" disclaimer.
+### ARCHITECTURE: Four ADRs created in `docs/decisions/` — LangGraph, ChromaDB, LLM factory, FastAPI + Next.js.
+### CODE: Pydantic validators added to all extraction and insight models — clamping rather than raising on bad LLM output.
+### ARCHITECTURE: `memory_synthesis_node` pre-compresses RAG context into an 8–10 line brief before analysis; skips below 0.5 cosine similarity; `check_context → memory_synthesis → initial_analysis`.
+### FIX: Four chat routing gaps fixed — conversational detection, `extract_converse.j2` `has_process` guard, post-analysis follow-up routed via `followup.j2` instead of re-running full analysis.
 
 ---
 
-## 2026-03-11 (Pydantic hardening + memory synthesis node)
+## 2026-03-11
 
-### CODE: Pydantic validators on all extraction and insight models
-
-- `Issue`, `Recommendation`, `AnalysisInsight`: case-normalisation, length truncation, and empty-title filtering on all fields. Validators clamp rather than raise to avoid hard failures on LLM output.
-- `ExtractedStep`: replaced hard `ge`/`le` constraints with silent clamping validators for all numeric fields.
-- `ExtractionResult`: filters steps with blank `step_name`.
-
-### ARCHITECTURE: `memory_synthesis_node` pre-compresses RAG context
-
-- New node synthesises raw RAG blobs (past analyses, rejections, cross-session patterns) into an 8–10 line brief via LLM before analysis runs. Skips when no memory or all similarity scores < 0.5; fails gracefully with raw blobs as fallback.
-- New `memory_brief: str | None` field in `AgentState`. New `memory_brief.j2` template.
-- `analyze.j2` conditionally renders compressed brief or raw memory blocks.
-- Graph wired: `check_context → memory_synthesis → initial_analysis`.
-
----
-
-## 2026-03-11 (Chat routing fixes)
-
-### FIX: Closed 4 chat routing gaps in extraction and post-analysis flow
-
-- `extract_new.j2`: LLM now responds conversationally instead of extracting when input lacks ≥2 describable steps.
-- `_is_conversational()`: extended to catch short confirmation signals ("looks good", "I'm done", etc.) capped at ≤60 chars.
-- `extract_converse.j2`: added `has_process` conditional — shows correct framing when process data is already loaded.
-- Post-analysis follow-up: `continue_conversation` now routes to `_answer_followup()` via `followup.j2` instead of re-running full analysis. Re-analysis still triggered when explicitly requested.
-
----
-
-## 2026-03-11 (Test suite expansion)
-
-### CODE: Added 162 unit tests, bringing total to ~416
-
-New coverage: `check_context_sufficiency`, `finalize_analysis_node`, edge routing, context utilities, `LLMTaskConfig`, `ExtractedStep` validators, normaliser pipeline.
-
----
-
-## 2026-03-11 (Prompt architecture overhaul)
-
-### ARCHITECTURE: Rewrote all prompts per Anthropic best practices
-
-**In-place rewrites:**
-- `analyze.j2`: data blocks moved to top in XML tags; query at bottom; not_problems section guarded on timing data; bare negative rules replaced with positive framing.
-- `system.j2`: stripped dead metric definitions that conflicted with judgment-based analysis approach.
-- `investigation_system.j2`: added `<investigation_budget>` block with hard cycle limit and arithmetic exit criteria. Tool descriptions rewritten to action-based.
-- `followup.j2`, `clarification.j2`, `improvement_suggestions.j2`: persona, tone, and format improvements; `business_context` added to improvement suggestions.
-
-**Extraction routing refactor:**
-- Replaced single `extraction.j2` (4-mode LLM routing) with 4 focused templates: `extract_new.j2`, `extract_update.j2`, `extract_estimate.j2`, `extract_converse.j2`. Shared fields in `_extraction_fields.j2`.
-- Deterministic code router `get_extraction_prompt()` replaces LLM-based routing decision.
+### CODE: +162 unit tests (total ~416) — `check_context_sufficiency`, `finalize_analysis_node`, edge routing, `LLMTaskConfig`, `ExtractedStep` validators.
+### ARCHITECTURE: Prompt overhaul per Anthropic best practices — XML data blocks in `analyze.j2`, `<investigation_budget>` in `investigation_system.j2`, extraction routing replaced with 4 focused templates and deterministic code router.
 
 ---
 

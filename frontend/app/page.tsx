@@ -259,12 +259,12 @@ export default function HomePage() {
                 className="flex flex-col overflow-hidden transition-all duration-300 ease-in-out"
                 style={{
                   width: hasResults ? "40%" : "100%",
-                  borderRight: hasResults ? "1px solid #1e2d45" : "none",
+                  borderRight: hasResults ? "1px solid #2e3140" : "none",
                 }}
               >
                 <div
                   className={`flex flex-col flex-1 overflow-hidden${!hasResults ? " dot-grid-bg" : ""}`}
-                  style={{ backgroundColor: hasResults ? "#0f1623" : "#080c14" }}
+                  style={{ backgroundColor: hasResults ? "#20232b" : "#1a1c22" }}
                 >
                   {/* Phase 1 empty state — shown before any messages */}
                   {!hasResults && !hasMessages && (

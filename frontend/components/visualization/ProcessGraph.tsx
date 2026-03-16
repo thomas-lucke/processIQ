@@ -32,19 +32,19 @@ const ROW_SPACING = 140;  // px per y unit (lane spacing for branching processes
 // ---------------------------------------------------------------------------
 
 const SEVERITY_FILL: Record<Severity, string> = {
-  high: "#ef4444",
-  medium: "#f59e0b",
-  core_value: "#22c55e",
-  recommendation_affected: "#22c55e",
-  normal: "#22c55e",
+  high: "#dc2626",
+  medium: "#ea580c",
+  core_value: "#16a34a",
+  recommendation_affected: "#16a34a",
+  normal: "#16a34a",
 };
 
 const SEVERITY_MINIMAP: Record<Severity, string> = {
-  high: "#ef4444",
-  medium: "#f59e0b",
-  core_value: "#22c55e",
-  recommendation_affected: "#22c55e",
-  normal: "#22c55e",
+  high: "#dc2626",
+  medium: "#ea580c",
+  core_value: "#16a34a",
+  recommendation_affected: "#16a34a",
+  normal: "#16a34a",
 };
 
 // ---------------------------------------------------------------------------
@@ -60,17 +60,19 @@ interface ProcessNodeData {
   showRecOutline: boolean;  // yellow ring for recommendation_affected in after-view
 }
 
-function ProcessNode({ data }: NodeProps<ProcessNodeData>) {
+function ProcessNode({ data, xPos, yPos }: NodeProps<ProcessNodeData>) {
   const [hovered, setHovered] = useState(false);
   const fill = SEVERITY_FILL[data.severity] ?? "#22c55e";
+  // Flip tooltip below node when node is near the top of the canvas
+  const tooltipBelow = yPos < 120;
 
   const borderStyle = data.isHighlighted
     ? "3px solid #fbbf24"
     : data.showRecOutline && data.severity === "recommendation_affected"
     ? "3px solid #facc15"
     : data.severity === "high" || data.severity === "medium"
-    ? "2px solid rgba(255,255,255,0.3)"
-    : "2px solid rgba(255,255,255,0.15)";
+    ? "2px solid rgba(0,0,0,0.18)"
+    : "2px solid rgba(0,0,0,0.10)";
 
   const shadow = data.isHighlighted
     ? "0 0 0 4px rgba(251,191,36,0.25), 0 4px 16px rgba(0,0,0,0.6)"
@@ -116,7 +118,7 @@ function ProcessNode({ data }: NodeProps<ProcessNodeData>) {
           whiteSpace: "nowrap",
           fontSize: 11,
           fontWeight: 500,
-          color: "#cbd5e1",
+          color: "#5a6070",
           pointerEvents: "none",
           maxWidth: 160,
           overflow: "hidden",
@@ -132,11 +134,13 @@ function ProcessNode({ data }: NodeProps<ProcessNodeData>) {
         <div
           style={{
             position: "absolute",
-            bottom: data.size + 10,
+            ...(tooltipBelow
+              ? { top: data.size + 10 }
+              : { bottom: data.size + 10 }),
             left: "50%",
             transform: "translateX(-50%)",
-            backgroundColor: "#1e293b",
-            border: "1px solid #475569",
+            backgroundColor: "#252830",
+            border: "1px solid #2e3140",
             borderRadius: 8,
             padding: "8px 12px",
             zIndex: 9999,
@@ -151,7 +155,7 @@ function ProcessNode({ data }: NodeProps<ProcessNodeData>) {
               style={{
                 fontSize: i === 0 ? 12 : 11,
                 fontWeight: i === 0 ? 600 : 400,
-                color: i === 0 ? "#f1f5f9" : "#94a3b8",
+                color: i === 0 ? "#e8eaf2" : "#8b91a8",
                 lineHeight: "1.6",
               }}
             >
@@ -221,8 +225,8 @@ function buildReactFlowData(
     target: e.target,
     type: "smoothstep",
     animated: false,
-    style: { stroke: "#3d5270", strokeWidth: 1.5 },
-    markerEnd: { type: MarkerType.ArrowClosed, color: "#3d5270" },
+    style: { stroke: "#3a3f54", strokeWidth: 1.5 },
+    markerEnd: { type: MarkerType.ArrowClosed, color: "#3a3f54" },
   }));
 
   return { nodes, edges };
@@ -304,8 +308,8 @@ export function ProcessGraph({ schema, highlightedSteps = [] }: ProcessGraphProp
 
       {/* Highlighted steps info bar */}
       {highlightedSteps.length > 0 && (
-        <div className="text-xs text-amber-400 bg-amber-950/40 border border-amber-800/50 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />
+        <div className="text-xs text-orange-400 bg-orange-950/40 border border-orange-900/60 rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />
           Highlighting: {highlightedSteps.join(", ")}
         </div>
       )}
@@ -328,15 +332,15 @@ export function ProcessGraph({ schema, highlightedSteps = [] }: ProcessGraphProp
           nodeTypes={NODE_TYPES}
           proOptions={{ hideAttribution: true }}
         >
-          <Background color="#1e2d45" gap={20} variant={BackgroundVariant.Dots} />
+          <Background color="#3a3f54" gap={20} variant={BackgroundVariant.Dots} />
           <Controls showInteractive={false} />
           <MiniMap
             nodeColor={(n) => {
               const data = n.data as ProcessNodeData;
               return SEVERITY_MINIMAP[data.severity] ?? "#22c55e";
             }}
-            maskColor="rgba(15, 23, 42, 0.7)"
-            style={{ backgroundColor: "#0f172a", border: "1px solid #1e293b" }}
+            maskColor="rgba(26, 28, 34, 0.75)"
+            style={{ backgroundColor: "#20232b", border: "1px solid #2e3140" }}
           />
         </ReactFlow>
       </div>
@@ -344,20 +348,20 @@ export function ProcessGraph({ schema, highlightedSteps = [] }: ProcessGraphProp
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-xs text-ink-muted items-center">
         <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-red-500" />
+          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-red-600" />
           Bottleneck
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-amber-500" />
+          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-orange-600" />
           Needs attention
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-green-500" />
+          <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 bg-green-700" />
           Running well
         </div>
         {hasAfterDiff && (
           <div className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-yellow-400 bg-green-500" />
+            <span className="inline-block w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-yellow-500 bg-green-700" />
             Fix planned
           </div>
         )}

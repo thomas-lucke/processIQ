@@ -93,7 +93,11 @@ def memory_synthesis_node(state: AgentState) -> dict[str, Any]:
         from processiq.llm import extract_text_content, get_chat_model
         from processiq.prompts import render_prompt
 
-        model = get_chat_model(task=TASK_EXPLANATION)
+        model = get_chat_model(
+            task=TASK_EXPLANATION,
+            analysis_mode=state.get("analysis_mode"),
+            provider=state.get("llm_provider"),
+        )
         prompt = render_prompt(
             "memory_brief",
             similar_past_analyses=similar,
@@ -535,6 +539,11 @@ def _run_llm_analysis(
             HumanMessage(content=user_msg),
         ]
 
+        logger.info(
+            "Calling LLM for structured analysis (model=%s/%s)...",
+            llm_provider or "default",
+            analysis_mode or "default",
+        )
         # Try up to 2 times (retry once on failure)
         for attempt in range(2):
             logger.debug(

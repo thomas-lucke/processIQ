@@ -37,14 +37,14 @@ PROVIDER_MODEL_PRESETS: dict[str, dict[str, dict[str, str] | str]] = {
         "balanced": {
             "extraction": "claude-haiku-4-5-20251001",
             "clarification": "claude-haiku-4-5-20251001",
-            "explanation": "claude-sonnet-4-5-20250929",
-            "analysis": "claude-sonnet-4-5-20250929",
+            "explanation": "claude-sonnet-4-6",
+            "analysis": "claude-sonnet-4-6",
         },
         "deep_analysis": {
-            "extraction": "claude-sonnet-4-5-20250929",
-            "clarification": "claude-sonnet-4-5-20250929",
-            "explanation": "claude-sonnet-4-5-20250929",
-            "analysis": "claude-sonnet-4-5-20250929",
+            "extraction": "claude-sonnet-4-6",
+            "clarification": "claude-sonnet-4-6",
+            "explanation": "claude-sonnet-4-6",
+            "analysis": "claude-sonnet-4-6",
         },
     },
     "ollama": {

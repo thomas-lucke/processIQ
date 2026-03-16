@@ -83,7 +83,7 @@ function StatusChip({ status }: { status: AIStatus }) {
     const steps = status === "extracting" ? EXTRACTING_STEPS : ANALYZING_STEPS;
     const color = status === "extracting"
       ? "bg-accent-muted text-accent border border-accent/20"
-      : "bg-amber-950 text-amber-400 border border-amber-900/50";
+      : "bg-dark-card text-ink-muted border border-dark-border";
     return (
       <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", color)}>
         <span className="w-1.5 h-1.5 rounded-full bg-current pulse-dot flex-shrink-0" />

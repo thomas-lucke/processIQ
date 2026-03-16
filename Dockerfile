@@ -5,6 +5,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangoft2-1.0-0 libgdk-pixbuf-xlib-2.0-0 \
     libffi-dev shared-mime-info \
+    libgl1 libglib2.0-0 \
  && rm -rf /var/lib/apt/lists/*
 
 RUN pip install uv

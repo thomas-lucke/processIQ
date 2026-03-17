@@ -270,7 +270,7 @@ flowchart LR
 
 **Investigation tools** (`agent/tools.py`): `analyze_dependency_impact`, `validate_root_cause`, `check_constraint_feasibility`. All use `InjectedState` — the LLM never sees the state parameter; LangGraph injects it at call time.
 
-**Cycle control:** `AgentState.cycle_count` tracks LLM decision turns. Configurable via `AGENT_MAX_CYCLES` (default: 3) or an optional UI slider (`AGENT_LOOP_SLIDER_ENABLED`). The LLM also stops naturally when no further tool calls are needed.
+**Cycle control:** `AgentState.cycle_count` tracks LLM decision turns. Configurable via `AGENT_MAX_CYCLES` (default: 3) or the UI slider (disabled when `DEMO_MODE=true`). The LLM also stops naturally when no further tool calls are needed.
 
 ### File Structure
 

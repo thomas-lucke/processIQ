@@ -342,32 +342,129 @@ def investigate_node(state: AgentState) -> dict[str, Any]:
     }
 
 
+def _parse_investigation_verdict(text: str) -> dict[str, str] | None:
+    """Extract the structured verdict block from the haiku investigation summary.
+
+    Returns a dict with keys: CONFIDENCE, REASON, SEVERITY_CHANGES
+    or None if no verdict block found.
+    """
+    import re
+
+    match = re.search(
+        r"<investigation_verdict>(.*?)</investigation_verdict>",
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        return None
+
+    block = match.group(1)
+    result: dict[str, str] = {}
+    for line in block.strip().splitlines():
+        if ":" in line:
+            key, _, value = line.partition(":")
+            result[key.strip()] = value.strip()
+    return result if "CONFIDENCE" in result else None
+
+
 def finalize_analysis_node(state: AgentState) -> dict[str, Any]:
     """Node: Finalize and package the analysis results.
 
-    Incorporates any tool findings from the investigation loop into the
-    structured AnalysisInsight.investigation_findings field.
+    Reads the haiku investigation summary to update confidence_score and
+    confidence_notes based on what the tool loop actually found.
+    Also collects tool call strings for the UI investigation timeline.
     """
-    from langchain_core.messages import ToolMessage
+    from langchain_core.messages import AIMessage, ToolMessage
 
     logger.info("Node: finalize_analysis - START")
 
     insight = state.get("analysis_insight")
     confidence = state.get("confidence_score", 0.0)
     error = state.get("error")
+    messages = state.get("messages", [])
 
-    # Extract tool results from message history into the structured field
+    # Collect raw tool outputs for the UI timeline
     tool_findings = [
         msg.content
-        for msg in state.get("messages", [])
+        for msg in messages
         if isinstance(msg, ToolMessage) and isinstance(msg.content, str) and msg.content
     ]
 
-    if tool_findings and insight:
+    # Find the haiku's final summary — last AIMessage with no tool calls
+    investigation_summary: str | None = None
+    for msg in reversed(messages):
+        if (
+            isinstance(msg, AIMessage)
+            and not getattr(msg, "tool_calls", None)
+            and isinstance(msg.content, str)
+            and msg.content.strip()
+        ):
+            investigation_summary = msg.content
+            break
+
+    # Parse and apply the verdict if present
+    confidence_adjustment = 0.0
+    verdict_note: str | None = None
+
+    if investigation_summary and insight:
+        verdict = _parse_investigation_verdict(investigation_summary)
+        if verdict:
+            direction = verdict.get("CONFIDENCE", "UNCHANGED").upper()
+            reason = verdict.get("REASON", "")
+
+            if direction == "HIGHER":
+                confidence_adjustment = 0.05
+                verdict_note = f"Investigation raised confidence: {reason}"
+                logger.info(
+                    "Node: finalize_analysis - confidence raised by investigation"
+                )
+            elif direction == "LOWER":
+                confidence_adjustment = -0.08
+                verdict_note = f"Investigation lowered confidence: {reason}"
+                logger.info(
+                    "Node: finalize_analysis - confidence lowered by investigation"
+                )
+            else:
+                logger.info(
+                    "Node: finalize_analysis - confidence unchanged by investigation"
+                )
+
+            # Apply severity changes if any
+            severity_changes = verdict.get("SEVERITY_CHANGES", "NONE")
+            if severity_changes and severity_changes.upper() != "NONE":
+                for change in severity_changes.split(","):
+                    change = change.strip()
+                    if ":" in change:
+                        title, _, new_sev = change.partition(":")
+                        new_sev = new_sev.strip().lower()
+                        if new_sev in ("high", "medium", "low"):
+                            for issue in insight.issues:
+                                if issue.title.lower() == title.strip().lower():
+                                    old_sev = issue.severity
+                                    issue.severity = new_sev  # type: ignore[assignment]
+                                    logger.info(
+                                        "Node: finalize_analysis - severity %s → %s for '%s'",
+                                        old_sev,
+                                        new_sev,
+                                        issue.title,
+                                    )
+                                    break
+
+    # Clamp and apply confidence adjustment
+    updated_confidence = max(0.0, min(1.0, confidence + confidence_adjustment))
+
+    if insight:
         insight.investigation_findings = tool_findings
+        if verdict_note:
+            sep = " " if insight.confidence_notes else ""
+            insight.confidence_notes = insight.confidence_notes + sep + verdict_note
+
         logger.info(
-            "Node: finalize_analysis - incorporated %d investigation finding(s)",
+            "Node: finalize_analysis - incorporated %d finding(s), "
+            "confidence %.0f%% → %.0f%%",
             len(tool_findings),
+            confidence * 100,
+            updated_confidence * 100,
         )
 
     if error:
@@ -379,14 +476,17 @@ def finalize_analysis_node(state: AgentState) -> dict[str, Any]:
         reasoning = (
             f"Analysis finalized: {len(insight.issues)} issues, "
             f"{len(insight.recommendations)} recommendations, "
-            f"confidence={confidence:.0%}{findings_note}"
+            f"confidence={updated_confidence:.0%}{findings_note}"
         )
     else:
         reasoning = "Analysis finalized with no results"
 
-    logger.info("Node: finalize_analysis - DONE (confidence=%.0f%%)", confidence * 100)
+    logger.info(
+        "Node: finalize_analysis - DONE (confidence=%.0f%%)", updated_confidence * 100
+    )
 
     return {
+        "confidence_score": updated_confidence,
         "reasoning_trace": [*state.get("reasoning_trace", []), reasoning],
         "current_phase": "complete",
     }

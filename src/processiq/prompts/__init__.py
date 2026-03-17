@@ -286,6 +286,7 @@ def get_improvement_suggestions_prompt(
     steps_with_dependencies: int,
     data_gaps: list[str] | None = None,
     business_context: str | None = None,
+    confidence_score: float | None = None,
 ) -> str:
     """Get prompt for generating post-extraction improvement suggestions.
 
@@ -300,6 +301,8 @@ def get_improvement_suggestions_prompt(
         business_context: Optional formatted business context string. When
             provided, the LLM can calibrate suggestions to the business size
             and industry (e.g., cost benchmarks for an agency vs. enterprise).
+        confidence_score: Overall confidence score (0.0-1.0). When below 0.6,
+            the prompt instructs the LLM to open with a blocked-analysis notice.
 
     Returns:
         Rendered prompt string for LLM to generate improvement suggestions.
@@ -314,6 +317,7 @@ def get_improvement_suggestions_prompt(
         steps_with_dependencies=steps_with_dependencies,
         data_gaps=data_gaps,
         business_context=business_context,
+        confidence_score=confidence_score,
     )
 
 

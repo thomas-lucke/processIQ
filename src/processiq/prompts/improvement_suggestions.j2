@@ -24,14 +24,19 @@ Missing data:
 {% endif %}
 
 <instructions>
+{% if confidence_score is defined and confidence_score is not none and confidence_score < 0.6 %}
+Open with exactly this sentence (substituting the actual percentage): "Analysis confidence is {{ (confidence_score * 100) | round | int }}% — too low to run. Add the following to unlock it:"
+Then list 2–4 bullet points of the most critical missing data items.
+{% else %}
 Write 2–4 short suggestions telling the user what additional data would most improve the analysis. Focus on the gaps that matter most for producing actionable ROI estimates and accurate bottleneck identification.
+Do not open with praise or acknowledgement of their effort. Start directly with the suggestions.
+{% endif %}
 
 Guidelines:
 - Be direct. Name the specific missing data and explain in one sentence why it matters (e.g., "Time estimates for the review steps would let us calculate where delays are actually accumulating").
 - Give concrete examples calibrated to their process (e.g., "roughly how long does the client approval step take — even a range like 1–3 days helps").
 - Approximate figures are fine — they do not need exact numbers.
 - Format as a short bulleted list (2–4 items). Do not force this into paragraph form.
-- Do not open with praise or acknowledgement of their effort. Start directly with the suggestions.
 </instructions>
 
 What additional information would most improve this analysis?

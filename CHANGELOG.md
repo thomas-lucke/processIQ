@@ -4,6 +4,23 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ---
 
+## 2026-03-17
+
+### FIX: Improvement suggestions message now opens with a blocked-analysis notice when confidence < 60%
+
+### ARCHITECTURE: Investigation loop findings now feed back into analysis output
+
+- Haiku emits a structured `<investigation_verdict>` block at the end of its summary (CONFIDENCE: HIGHER/UNCHANGED/LOWER, REASON, SEVERITY_CHANGES)
+- `finalize_analysis_node` parses this verdict and adjusts `confidence_score` (±5–8%) and appends the reason to `confidence_notes`
+- Issue severity can be promoted or demoted if tool findings warrant it
+- No additional LLM call — verdict is extracted from the summary message haiku already writes
+
+### FIX: Annual volume extraction — volume mentioned in user input was discarded as a warning log instead of being stored, causing ROI estimates to be off by ~10x when actual volume was provided. Added `annual_volume` field to `ExtractionResult` and wired it through to `ProcessData`.
+
+### FIX: LangSmith tracing flag exposed via `/health` endpoint and reflected in the settings drawer Data & Privacy section. `tracing_enabled` is only true when both the flag is set and an API key is present.
+
+### FIX: Empty state example prompts made non-interactive — chips were submitting to the chat on click; now purely visual.
+
 ## 2026-03-16
 
 ### CODE: Test coverage — `agent/interface.py` — 33 new unit tests covering `extract_from_text`, `analyze_process`, `continue_conversation`, and `AgentResponse` properties. Overall `src/` coverage moved from 64% → 72%.

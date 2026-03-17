@@ -185,6 +185,7 @@ def _generate_improvement_suggestions(
             steps_with_dependencies=steps_with_deps,
             data_gaps=confidence.data_gaps,
             business_context=business_context,
+            confidence_score=confidence.score,
         )
 
         logger.debug("Generating improvement suggestions for: %s", process_data.name)

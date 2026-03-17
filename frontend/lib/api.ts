@@ -54,8 +54,27 @@ async function apiFetch<T>(
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`API ${res.status}: ${detail}`);
+    const text = await res.text().catch(() => res.statusText);
+    if (res.status === 422) {
+      try {
+        const body = JSON.parse(text);
+        const errors: Array<{ loc: string[]; msg: string }> = body.detail ?? [];
+        if (errors.length > 0) {
+          const messages = errors.map(({ loc, msg }) => {
+            const field = loc[loc.length - 1];
+            const label =
+              field === "budget_limit" ? "Budget limit" :
+              field === "timeline_weeks" ? "Timeline (weeks)" :
+              field;
+            return `${label}: ${msg.replace(/^Input should be/, "must be")}`;
+          });
+          throw new Error(messages.join("; "));
+        }
+      } catch (e) {
+        if (e instanceof Error && !e.message.startsWith("API")) throw e;
+      }
+    }
+    throw new Error(`API ${res.status}: ${text}`);
   }
 
   return res.json() as Promise<T>;

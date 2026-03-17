@@ -1,10 +1,16 @@
 import os
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from processiq.model_presets import PROVIDER_DEFAULTS, get_model_for_task
+
+# Resolve .env relative to the project root (two levels up from this file:
+# src/processiq/config.py -> src/processiq -> src -> project root)
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_ENV_FILE = _PROJECT_ROOT / ".env"
 
 
 class LLMTaskConfig(BaseModel):
@@ -33,7 +39,7 @@ ANALYSIS_MODE_DEEP = "deep_analysis"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         case_sensitive=False,
     )

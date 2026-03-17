@@ -147,6 +147,10 @@ class ExtractionResult(BaseModel):
     process_name: str = Field(
         default="Extracted Process", description="Inferred process name"
     )
+    annual_volume: int | None = Field(
+        default=None,
+        description="How many times this process runs per year, if mentioned in the input.",
+    )
     warnings: list[str] = Field(
         default_factory=list, description="Issues found during extraction"
     )
@@ -370,7 +374,9 @@ def _extraction_result_to_process_data(result: ExtractionResult) -> ProcessData:
 
     _infer_missing_dependencies(steps)
 
-    return ProcessData(name=result.process_name, steps=steps)
+    return ProcessData(
+        name=result.process_name, steps=steps, annual_volume=result.annual_volume
+    )
 
 
 def _infer_missing_dependencies(steps: list[ProcessStep]) -> None:
@@ -571,6 +577,10 @@ def normalize_with_llm(
         )
 
     extraction = response.extraction
+
+    # Log annual volume if extracted
+    if extraction.annual_volume:
+        logger.info("Annual volume extracted from input: %d", extraction.annual_volume)
 
     # Log warnings if any
     if extraction.warnings:

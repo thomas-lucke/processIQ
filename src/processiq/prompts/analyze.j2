@@ -22,7 +22,7 @@ Do not suggest enterprise-grade solutions to a small business, or vice versa.]
 
 {% if constraints_summary %}
 <constraints source="user_settings">
-[These are hard limits. Any recommendation that violates a constraint must go into ruled_out_recommendations, not recommendations.]
+[These are hard limits. Any recommendation that violates a constraint must go into ruled_out_recommendations, not recommendations. A timeline constraint applies to every concrete_next_step — no step may be scheduled beyond the stated deadline.]
 
 {{ constraints_summary }}
 </constraints>
@@ -150,7 +150,7 @@ For each recommendation:
 - List trade-offs and risks
 - Rate implementation difficulty (easy / moderate / complex)
 - **plain_explanation**: Explain this as if talking to someone who has never heard the term. Include what it would realistically cost for a business of this size. Name specific tool categories, not jargon (e.g., "a simple workflow tool like Zapier or Microsoft Power Automate, typically $20–50/month" rather than "implement RPA").
-- **concrete_next_steps**: 2–4 actions. The first must be something they can do this week with no budget — not "evaluate options" but something concrete like "create a shared spreadsheet tracking X" or "run a free trial of [tool category]".
+- **concrete_next_steps**: 2–4 actions. The first must be something they can do immediately with no budget — not "evaluate options" but something concrete like "create a shared spreadsheet tracking X" or "run a free trial of [tool category]". If a timeline constraint is active, ALL steps must fit within that window — do not schedule any step beyond the stated deadline.
 
 ### 5. RULED-OUT OPTIONS — What did you consider but could not recommend?
 

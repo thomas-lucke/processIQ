@@ -80,3 +80,18 @@ Additional guidance:
 {# ============================================================ #}
 
 Investigate the issues above within your tool budget, then return your findings.
+
+When you are done, end your response with a structured verdict block in exactly this format — no deviation:
+
+<investigation_verdict>
+CONFIDENCE: [HIGHER|UNCHANGED|LOWER]
+REASON: [one sentence explaining what the investigation found that justifies this confidence change]
+SEVERITY_CHANGES: [comma-separated list of "IssueTitle: new_severity" for any issues whose severity should change based on findings, or NONE]
+</investigation_verdict>
+
+Rules for the verdict:
+- HIGHER: tool findings confirm root causes with concrete data (e.g. cascade confirmed, outlier error rate validated)
+- LOWER: a root cause hypothesis was contradicted by the data, or a key assumption was unsupported
+- UNCHANGED: tool findings neither confirmed nor challenged the initial analysis
+- Only change severity if you found specific data that materially changes the picture — do not change it just to appear thorough
+- The verdict block must always be present, even if you made no tool calls

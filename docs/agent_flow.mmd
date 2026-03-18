@@ -1,0 +1,61 @@
+---
+title: ProcessIQ Agent Workflow
+---
+flowchart TD
+    classDef state fill:#FFF4D6,stroke:#B8860B,stroke-width:2px,color:#111
+    classDef decision fill:#EAF2FF,stroke:#3563B7,stroke-width:2px,color:#111
+    classDef tool fill:#EAF8EE,stroke:#2E8B57,stroke-width:2px,color:#111
+    classDef output fill:#FFE9EA,stroke:#C23B3B,stroke-width:2px,color:#111
+    classDef note fill:#F7F7F7,stroke:#888,stroke-width:1px,color:#444,stroke-dasharray:4 4
+
+    START["Start analysis<br/>ProcessData + constraints + profile + memory context"]:::state
+
+    CHECK{"check_context<br/>Is confidence high enough<br/>to continue?"}:::decision
+
+    CLARIFY["request_clarification<br/>Generate targeted follow-up questions"]:::state
+
+    MEMORY["memory_synthesis<br/>Compress high-signal prior context"]:::state
+
+    INITIAL["initial_analysis<br/>Calculate metrics and generate first-pass insight"]:::state
+
+    INVESTIGATE_DECISION{"Investigate further?<br/>max_cycles = 0?"}:::decision
+
+    INVESTIGATE["investigate<br/>Decide whether tool calls are needed"]:::state
+
+    TOOLS["tools<br/>Dependency impact<br/>Root-cause validation<br/>Constraint feasibility"]:::tool
+
+    FINALIZE["finalize<br/>Incorporate findings and package final result"]:::state
+
+    CLARIFY_RESULT["Output<br/>Clarifying questions for the user"]:::output
+
+    RESULT["Output<br/>AnalysisInsight + confidence notes + graph data"]:::output
+
+    FEEDBACK["User submits feedback<br/>Critique or correction"]:::state
+
+    START --> CHECK
+    CHECK -- "Confidence too low" --> CLARIFY
+    CLARIFY --> CLARIFY_RESULT
+
+    CHECK -- "Confidence sufficient" --> MEMORY
+    MEMORY --> INITIAL
+    INITIAL --> INVESTIGATE_DECISION
+
+    INVESTIGATE_DECISION -- "No / disabled" --> FINALIZE
+    INVESTIGATE_DECISION -- "Yes" --> INVESTIGATE
+
+    INVESTIGATE -- "Tool calls requested" --> TOOLS
+    TOOLS -- "Result returned" --> INVESTIGATE
+    INVESTIGATE -- "Done or cycle limit reached (default 3, max 10)" --> FINALIZE
+
+    FINALIZE --> RESULT
+
+    RESULT -. "optional" .-> FEEDBACK
+    FEEDBACK -. "re-enters with feedback context" .-> CHECK
+
+    OLLAMA_NOTE["Provider note:<br/>The Ollama path skips the tool-calling loop<br/>and finalizes directly after initial_analysis."]:::note
+    CLARIFY_NOTE["Clarification path:<br/>The workflow stops early and returns questions<br/>instead of producing a partial analysis."]:::note
+    FEEDBACK_NOTE["Feedback loop:<br/>Feedback is stored and injected into the next<br/>analysis as part of the memory context."]:::note
+
+    INVESTIGATE -.-> OLLAMA_NOTE
+    CLARIFY -.-> CLARIFY_NOTE
+    FEEDBACK -.-> FEEDBACK_NOTE

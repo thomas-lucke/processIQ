@@ -1,74 +1,69 @@
 ---
-title: ProcessIQ — Agentic Architecture
+title: ProcessIQ High-Level Architecture
 ---
-flowchart TD
-    %% Styling
-    classDef deterministic fill:#d6f5d6,stroke:#2d8a2d,stroke-width:2px,color:#1a1a1a
-    classDef agentic fill:#fff3cd,stroke:#b8860b,stroke-width:2px,color:#1a1a1a
-    classDef decision fill:#d0e0f7,stroke:#2456b5,stroke-width:2.5px,color:#1a1a1a
-    classDef output fill:#f8d7da,stroke:#c0392b,stroke-width:2.5px,color:#1a1a1a
-    classDef phase2 fill:#e8e8e8,stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5,color:#666
+flowchart TB
+    classDef surface fill:#EAF2FF,stroke:#3563B7,stroke-width:2px,color:#111
+    classDef service fill:#EAF8EE,stroke:#2E8B57,stroke-width:2px,color:#111
+    classDef intelligence fill:#FFF4D6,stroke:#B8860B,stroke-width:2px,color:#111
+    classDef storage fill:#F4EAFF,stroke:#7A3DB8,stroke-width:2px,color:#111
+    classDef result fill:#FFE9EA,stroke:#C23B3B,stroke-width:2px,color:#111
+    classDef note fill:#F7F7F7,stroke:#888,stroke-width:1px,color:#444,stroke-dasharray:4 4
 
-    %% ── 1. INPUT & INGESTION ──
-    subgraph Ingestion ["1 · User Input & Ingestion"]
+    USER["User"]:::surface
+
+    APP["Web App<br/>Next.js + React<br/>Chat, step editor, results, library"]:::surface
+
+    API["API Service<br/>FastAPI<br/>Validation, rate limiting, response shaping"]:::service
+
+    subgraph ENGINE["Analysis Engine"]
         direction TB
-        UI["Next.js UI<br>(chat-first)"]:::deterministic
-        FILES["File Upload<br>(CSV · Excel · PDF · Word · Images)"]:::deterministic
-        CHAT["Chat Description<br>(text)"]:::deterministic
+        EXTRACT["Extract process data<br/>from text or uploaded files"]:::intelligence
+        GATE{"Enough context<br/>to analyze?"}:::intelligence
+        ANALYZE["Run analysis workflow<br/>metrics, recommendations, graph data"]:::intelligence
+        INVESTIGATE["Optional investigation step<br/>for deeper validation"]:::intelligence
 
-        UI --> FILES
-        UI --> CHAT
-
-        FILES --> PARSE["Parse<br>(Docling · pandas)"]:::deterministic
-        PARSE --> EXTRACT
-        CHAT --> EXTRACT["LLM: Extract ProcessData<br>(Instructor + extraction.j2)"]:::agentic
-        EXTRACT --> REVIEW["User Reviews &amp; Edits<br>Extracted Data Card"]:::deterministic
-        REVIEW --> VALID
-
-        VALID(["Validated Pydantic Models<br>(ProcessData · Constraints · BusinessProfile)"]):::deterministic
+        EXTRACT --> GATE
+        GATE -- "No" --> ASK["Ask clarifying questions"]:::intelligence
+        ASK --> EXTRACT
+        GATE -- "Yes" --> ANALYZE
+        ANALYZE --> INVESTIGATE
     end
 
-    %% ── 2. AGENT CORE (LANGGRAPH) ──
-    subgraph Agent ["2 · Agent Orchestration — LangGraph"]
-        direction TB
-
-        CTX{"check_context<br><br>Confidence ≥ threshold?"}:::decision
-        CTX -- "No → request_clarification" --> CLARIFY["request_clarification<br><br>LLM generates questions<br>(clarification.j2)"]:::agentic
-        CLARIFY -- "User replies → re-check" --> CTX
-
-        CTX -- "Yes → analyze" --> ANALYZE["analyze<br><br>1. Calculate metrics (deterministic)<br>2. LLM analysis (analyze.j2)<br>   — identifies issues &amp; root causes<br>   — generates recommendations + ROI<br>   — flags core value work<br>   — applies feedback history"]:::agentic
-
-        ANALYZE --> FINALIZE["finalize<br><br>Package AnalysisInsight<br>Set current_phase = complete"]:::deterministic
+    subgraph DATA["Memory and Storage"]
+        direction LR
+        SQLITE["SQLite<br/>profiles, sessions, feedback, checkpoints"]:::storage
+        CHROMA["ChromaDB<br/>similar past analyses"]:::storage
+        CACHE["Active session cache<br/>graph and CSV lookups"]:::storage
     end
 
-    %% ── 3. KNOWLEDGE ENRICHMENT (Phase 2) ──
-    subgraph Knowledge ["3 · Knowledge Enrichment — Phase 2"]
-        direction TB
-        RAG["RAG / Knowledge Base<br>(ChromaDB)"]:::phase2
-        BENCH["Industry Benchmarks"]:::phase2
+    subgraph OUTPUTS["User-Facing Outputs"]
+        direction LR
+        INSIGHT["Analysis results<br/>issues, recommendations, scenarios"]:::result
+        GRAPH["Process graph<br/>React Flow schema from backend"]:::result
+        EXPORTS["Exports<br/>Markdown and plain text"]:::result
     end
 
-    %% ── 4. OUTPUT ──
-    subgraph Output ["4 · Output & Transparency"]
-        direction TB
-        RESULT["Results Display<br><br>Process Summary · Issues · Recommendations<br>Core Value Work · Reasoning Trace<br>Confidence Score"]:::output
-        EXPORT["Export<br>CSV · Text · Markdown"]:::output
-        RESULT --> EXPORT
-    end
+    USER --> APP
+    APP --> API
+    API --> EXTRACT
+    EXTRACT --> ANALYZE
 
-    %% ── Cross-subgraph connections ──
-    VALID --> CTX
-    FINALIZE --> RESULT
+    ANALYZE --> INSIGHT
+    ANALYZE --> GRAPH
+    INSIGHT --> EXPORTS
 
-    %% Feedback loop (session-scoped)
-    EXPORT -. "up/down votes on recommendations" .-> ANALYZE
+    ANALYZE <--> SQLITE
+    ANALYZE <--> CHROMA
+    API <--> CACHE
 
-    %% Phase 2
-    CLARIFY -.-> RAG
-    CLARIFY -.-> BENCH
+    INSIGHT -. "user submits feedback" .-> API
+    API -. "re-analysis with feedback context" .-> ANALYZE
 
-    %% ── Subgraph styling ──
-    style Ingestion fill:#f9fdf9,stroke:#2d8a2d,stroke-width:2px
-    style Agent fill:#fffef5,stroke:#b8860b,stroke-width:2px
-    style Knowledge fill:#f5f5f5,stroke:#999,stroke-width:1.5px,stroke-dasharray:5 5
-    style Output fill:#fef5f5,stroke:#c0392b,stroke-width:2px
+    APP -. "session reads via API" .-> SQLITE
+    API -. "active thread lookup" .-> CACHE
+
+    OLLAMA_NOTE["Note:<br/>Extraction is not fully local today,<br/>even when Ollama is selected in the UI."]:::note
+    CACHE_NOTE["Note:<br/>Graph and CSV lookup endpoints depend on the<br/>active in-memory cache, not full historical retrieval."]:::note
+
+    EXTRACT -.-> OLLAMA_NOTE
+    CACHE -.-> CACHE_NOTE

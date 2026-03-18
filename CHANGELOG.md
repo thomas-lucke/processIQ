@@ -4,6 +4,26 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ---
 
+## 2026-03-18
+
+### DOCS: Reworked product and interaction docs to match the current implementation
+
+- Rewrote `docs/PROJECT_BRIEF.md` as a current-state product and architecture brief.
+- Rewrote `docs/PRODUCT_STRATEGY.md` to focus on grounded product strategy and current product priorities.
+- Rewrote `docs/CONVERSATION_FLOW.md` to match the actual Next.js chat, review, analysis, and re-analysis flow.
+- Standardized tone and positioning across these documents so they read as maintainable product and engineering documentation.
+
+### DOCS: Split architecture visualization into two Mermaid diagrams
+
+- `docs/architecture_diagram.mmd` is now a high-level system view focused on the product surface, API, analysis engine, storage, and outputs.
+- Added `docs/agent_flow.mmd` as a separate workflow diagram for the LangGraph analysis flow.
+- Simplified labels and structure so each diagram is easier to scan and more useful to human readers.
+
+### DOCS: Corrected architecture and behavior descriptions
+
+- Updated documentation to reflect that the current backend delete/reset path removes profile data, saved sessions, embeddings, and checkpoints.
+- Kept visible caveats where they still matter, including the non-local extraction path behind Ollama selection and the in-memory cache dependency for graph/CSV lookup endpoints.
+
 ## 2026-03-17
 
 ### FIX: Improvement suggestions message now opens with a blocked-analysis notice when confidence < 60%
@@ -11,63 +31,63 @@ All notable design decisions and changes to ProcessIQ are documented here.
 ### ARCHITECTURE: Investigation loop findings now feed back into analysis output
 
 - Haiku emits a structured `<investigation_verdict>` block at the end of its summary (CONFIDENCE: HIGHER/UNCHANGED/LOWER, REASON, SEVERITY_CHANGES)
-- `finalize_analysis_node` parses this verdict and adjusts `confidence_score` (±5–8%) and appends the reason to `confidence_notes`
+- `finalize_analysis_node` parses this verdict and adjusts `confidence_score` (+/-5-8%) and appends the reason to `confidence_notes`
 - Issue severity can be promoted or demoted if tool findings warrant it
-- No additional LLM call — verdict is extracted from the summary message haiku already writes
+- No additional LLM call - verdict is extracted from the summary message haiku already writes
 
-### FIX: Annual volume extraction — volume mentioned in user input was discarded as a warning log instead of being stored, causing ROI estimates to be off by ~10x when actual volume was provided. Added `annual_volume` field to `ExtractionResult` and wired it through to `ProcessData`.
+### FIX: Annual volume extraction - volume mentioned in user input was discarded as a warning log instead of being stored, causing ROI estimates to be off by ~10x when actual volume was provided. Added `annual_volume` field to `ExtractionResult` and wired it through to `ProcessData`.
 
 ### FIX: LangSmith tracing flag exposed via `/health` endpoint and reflected in the settings drawer Data & Privacy section. `tracing_enabled` is only true when both the flag is set and an API key is present.
 
-### FIX: Empty state example prompts made non-interactive — chips were submitting to the chat on click; now purely visual.
+### FIX: Empty state example prompts made non-interactive - chips were submitting to the chat on click; now purely visual.
 
 ## 2026-03-16
 
-### CODE: Test coverage — `agent/interface.py` — 33 new unit tests covering `extract_from_text`, `analyze_process`, `continue_conversation`, and `AgentResponse` properties. Overall `src/` coverage moved from 64% → 72%.
+### CODE: Test coverage - `agent/interface.py` - 33 new unit tests covering `extract_from_text`, `analyze_process`, `continue_conversation`, and `AgentResponse` properties. Overall `src/` coverage moved from 64% to 72%.
 
 ## 2026-03-13
 
-### CODE: Export dropdown — `.md`, `.txt`, and PDF
+### CODE: Export dropdown - `.md`, `.txt`, and PDF
 
 - Replaced single Export button with a three-option dropdown
 - `.txt` strips markdown syntax client-side before download
 - PDF rendered server-side via WeasyPrint (`POST /export/pdf`); produces vector PDF with selectable text; `weasyprint>=62.0` added
 - `GET /export/csv/{thread_id}` wired to existing `csv_export.py` (API only, not in UI)
 
-### FIX: Constraints field name mismatch between Python and TypeScript — renamed `cannot_hire`/`max_implementation_weeks` to `no_new_hires`/`no_layoffs`/`timeline_weeks`; kept old names as computed properties for internal compatibility.
+### FIX: Constraints field name mismatch between Python and TypeScript - renamed `cannot_hire`/`max_implementation_weeks` to `no_new_hires`/`no_layoffs`/`timeline_weeks`; kept old names as computed properties for internal compatibility.
 
-### DESIGN: UI theme overhaul —  light gray surfaces (`#f0f2f5`) with neutral gray accent (`#5a6272`). All badges, graph, minimap, and status colors updated for both passes.
+### DESIGN: UI theme overhaul - light gray surfaces (`#f0f2f5`) with neutral gray accent (`#5a6272`). All badges, graph, minimap, and status colors updated for both passes.
 
 ## 2026-03-13
 
-### FIX: Removed dead draft analysis code — `_generate_draft_analysis` and `_generate_post_extraction_extras` deleted from `interface.py`; result was never sent to the frontend. Extracted latency reduced by ~60s.
-### FIX: Anthropic model IDs updated — `claude-sonnet-4-5-20250929` → `claude-sonnet-4-6` in `model_presets.py`.
+### FIX: Removed dead draft analysis code - `_generate_draft_analysis` and `_generate_post_extraction_extras` deleted from `interface.py`; result was never sent to the frontend. Extracted latency reduced by ~60s.
+### FIX: Anthropic model IDs updated - `claude-sonnet-4-5-20250929` to `claude-sonnet-4-6` in `model_presets.py`.
 ### CODE: Added entry log to `_run_llm_analysis` to close the 2-minute silent window during structured-output calls.
 
 ---
 
 ## 2026-03-12
 
-### ARCHITECTURE: CI/CD — GitHub Actions backend (ruff → mypy → pytest → bandit → detect-secrets) and frontend (ESLint → tsc → build) pipelines; `bandit` and `detect-secrets` added as dev deps; pre-commit pins updated.
-### ARCHITECTURE: Removed Streamlit UI — `src/processiq/ui/` and `app.py` deleted.
-### FIX: Cross-session feedback loop fully wired — rejected recommendations now persist to `business_profiles.rejected_approaches` and feed future analyses. Added FastAPI lifespan handler for SQLite shutdown.
+### ARCHITECTURE: CI/CD - GitHub Actions backend (ruff -> mypy -> pytest -> bandit -> detect-secrets) and frontend (ESLint -> tsc -> build) pipelines; `bandit` and `detect-secrets` added as dev deps; pre-commit pins updated.
+### ARCHITECTURE: Removed Streamlit UI - `src/processiq/ui/` and `app.py` deleted.
+### FIX: Cross-session feedback loop fully wired - rejected recommendations now persist to `business_profiles.rejected_approaches` and feed future analyses. Added FastAPI lifespan handler for SQLite shutdown.
 
 ---
 
 ## 2026-03-11
 
 ### DESIGN: Added `docs/responsible-ai.md` and `docs/system-card.md`; prompt injection section, security threat model, "not for personnel evaluation" disclaimer.
-### ARCHITECTURE: Four ADRs created in `docs/decisions/` — LangGraph, ChromaDB, LLM factory, FastAPI + Next.js.
-### CODE: Pydantic validators added to all extraction and insight models — clamping rather than raising on bad LLM output.
-### ARCHITECTURE: `memory_synthesis_node` pre-compresses RAG context into an 8–10 line brief before analysis; skips below 0.5 cosine similarity; `check_context → memory_synthesis → initial_analysis`.
-### FIX: Four chat routing gaps fixed — conversational detection, `extract_converse.j2` `has_process` guard, post-analysis follow-up routed via `followup.j2` instead of re-running full analysis.
+### ARCHITECTURE: Four ADRs created in `docs/decisions/` - LangGraph, ChromaDB, LLM factory, FastAPI + Next.js.
+### CODE: Pydantic validators added to all extraction and insight models - clamping rather than raising on bad LLM output.
+### ARCHITECTURE: `memory_synthesis_node` pre-compresses RAG context into an 8-10 line brief before analysis; skips below 0.5 cosine similarity; `check_context -> memory_synthesis -> initial_analysis`.
+### FIX: Four chat routing gaps fixed - conversational detection, `extract_converse.j2` `has_process` guard, post-analysis follow-up routed via `followup.j2` instead of re-running full analysis.
 
 ---
 
 ## 2026-03-11
 
-### CODE: +162 unit tests (total ~416) — `check_context_sufficiency`, `finalize_analysis_node`, edge routing, `LLMTaskConfig`, `ExtractedStep` validators.
-### ARCHITECTURE: Prompt overhaul per Anthropic best practices — XML data blocks in `analyze.j2`, `<investigation_budget>` in `investigation_system.j2`, extraction routing replaced with 4 focused templates and deterministic code router.
+### CODE: +162 unit tests (total ~416) - `check_context_sufficiency`, `finalize_analysis_node`, edge routing, `LLMTaskConfig`, `ExtractedStep` validators.
+### ARCHITECTURE: Prompt overhaul per Anthropic best practices - XML data blocks in `analyze.j2`, `<investigation_budget>` in `investigation_system.j2`, extraction routing replaced with 4 focused templates and deterministic code router.
 
 ---
 
@@ -76,7 +96,7 @@ All notable design decisions and changes to ProcessIQ are documented here.
 ### CODE: Richer embeddings and prompt effectiveness
 
 - `AnalysisMemory` gains `process_summary` and `issue_descriptions` (full LLM reasoning text). Embeddings now match on meaning rather than keyword labels.
-- Similarity threshold (0.4 cosine) added — retrieved analyses below threshold are dropped before prompt injection.
+- Similarity threshold (0.4 cosine) added - retrieved analyses below threshold are dropped before prompt injection.
 - `rejection_reasons` now correctly passed into the `similar_past` dict (was missing despite template expecting it).
 - `analyze.j2` past analyses and cross-session pattern blocks given concrete directives instead of vague suggestions.
 
@@ -114,7 +134,7 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ## 2026-03-06
 
-- Investigation depth slider (1–10) wired to `max_cycles_override`.
+- Investigation depth slider (1-10) wired to `max_cycles_override`.
 - FastAPI hardening: rate limiting, input caps, file extension whitelist, 50 MB limit, session TTL + LRU eviction, CORS narrowed.
 
 ---
@@ -123,7 +143,7 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ### ARCHITECTURE: FastAPI + Next.js replacing Streamlit
 
-- `api/main.py` with `/analyze`, `/extract`, `/extract-file`, `/continue`, `/graph-schema`. Next.js 15 App Router, TypeScript, Tailwind, React Flow. Two-phase layout: full-width chat → animated 40/60 split. Settings panel: LLM provider, analysis mode, constraints, business profile. Dark theme, DM Sans, design tokens.
+- `api/main.py` with `/analyze`, `/extract`, `/extract-file`, `/continue`, `/graph-schema`. Next.js 15 App Router, TypeScript, Tailwind, React Flow. Two-phase layout: full-width chat -> animated 40/60 split. Settings panel: LLM provider, analysis mode, constraints, business profile. Dark theme, DM Sans, design tokens.
 
 ---
 
@@ -159,7 +179,7 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ## 2026-02-06
 
-- LLM provider selector (OpenAI / Anthropic / Ollama) with model presets. Expert mode removed. Agent graph simplified 8 → 4 nodes.
+- LLM provider selector (OpenAI / Anthropic / Ollama) with model presets. Expert mode removed. Agent graph simplified 8 -> 4 nodes.
 
 ---
 
@@ -179,13 +199,13 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ## 2026-02-03
 
-### DECISION: Chat-first UI. `agent/interface.py` as clean boundary — UI never imports `graph.py`.
+### DECISION: Chat-first UI. `agent/interface.py` as clean boundary - UI never imports `graph.py`.
 
 ---
 
 ## 2026-01-28
 
-### DECISION: Multi-agent architecture rejected — LangGraph nodes provide sufficient task separation. ChromaDB and streaming deferred to Phase 2.
+### DECISION: Multi-agent architecture rejected - LangGraph nodes provide sufficient task separation. ChromaDB and streaming deferred to Phase 2.
 
 ---
 
@@ -197,4 +217,4 @@ All notable design decisions and changes to ProcessIQ are documented here.
 
 ## 2026-01-26
 
-### DECISION: Memory-ready design — Phase 1 populates from input only, Phase 2 persists cross-session.
+### DECISION: Memory-ready design - Phase 1 populates from input only, Phase 2 persists cross-session.

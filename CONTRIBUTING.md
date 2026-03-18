@@ -26,7 +26,7 @@ Ollama is useful for local analysis experiments, but it is not sufficient on its
 ### Install
 
 ```bash
-git clone https://github.com/SkybrushThriftwood/processIQ.git
+git clone https://github.com/thomas-lucke/processIQ.git
 cd processIQ
 uv sync --group dev
 cp .env.example .env

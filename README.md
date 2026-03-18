@@ -5,9 +5,32 @@ AI-powered business process analysis for teams that need actionable recommendati
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Agent](https://img.shields.io/badge/agent-LangGraph-orange)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Backend CI](https://github.com/SkybrushThriftwood/processIQ/actions/workflows/backend-ci.yml/badge.svg)
-![Frontend CI](https://github.com/SkybrushThriftwood/processIQ/actions/workflows/frontend-ci.yml/badge.svg)
-[![codecov](https://codecov.io/gh/SkybrushThriftwood/processIQ/graph/badge.svg?token=4JYVKASHOK)](https://codecov.io/gh/SkybrushThriftwood/processIQ)
+![Backend CI](https://github.com/thomas-lucke/processIQ/actions/workflows/backend-ci.yml/badge.svg)
+![Frontend CI](https://github.com/thomas-lucke/processIQ/actions/workflows/frontend-ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/thomas-lucke/processIQ/graph/badge.svg?token=4JYVKASHOK)](https://codecov.io/gh/thomas-lucke/processIQ)
+
+## Product Tour
+
+<img src="docs/assets/demo.gif" alt="ProcessIQ demo showing chat input, extraction review, analysis results, and the process graph" width="920" />
+
+<p><em>Short walkthrough: configure settings -> describe the process -> review extraction -> run analysis -> inspect issues -> inspect the graph.</em></p>
+
+<details>
+<summary>Screenshots</summary>
+
+<p><strong>01. Start / empty state</strong></p>
+<img src="docs/assets/01_start_screen.png" alt="ProcessIQ landing page with the empty chat state and settings area visible" width="920" />
+
+<p><strong>02. Extraction review table</strong></p>
+<img src="docs/assets/02_extraction_table.png" alt="Editable extraction review table with structured process steps before analysis" width="920" />
+
+<p><strong>03. Analysis results - Issues tab</strong></p>
+<img src="docs/assets/03_analysis_issues_tab.png" alt="Analysis results showing issues with severity and structured findings" width="920" />
+
+<p><strong>04. Process graph</strong></p>
+<img src="docs/assets/04_analysis_flow_chart.png" alt="React Flow process graph showing the analyzed workflow and severity states" width="920" />
+
+</details>
 
 ## What It Does
 
@@ -26,9 +49,9 @@ The core design rule is:
 
 Process metrics, confidence scoring, graph data, and persistence are deterministic Python code. The LLM is used for extraction, interpretation, and recommendation generation.
 
-## Why This Repo Is Interesting
+## Why It Stands Out
 
-This is not a thin chat wrapper around an LLM. The repository includes a few design choices that are worth highlighting in a portfolio review:
+This is not a thin chat wrapper around an LLM. The repository includes a few design choices that are worth highlighting:
 
 - A LangGraph workflow that branches on data completeness before analysis and can run a bounded investigation loop after the first pass.
 - A deliberate split between deterministic process math and LLM-generated reasoning.
@@ -51,26 +74,20 @@ This is not a thin chat wrapper around an LLM. The repository includes a few des
 ## Important Current Limitations
 
 - Extraction currently requires an OpenAI or Anthropic API key. Selecting `ollama` in the UI does not provide a fully local extraction path yet because the extraction pipeline uses Instructor-backed OpenAI/Anthropic clients.
-- The "Reset my data" flow deletes SQLite profile and session records, but it does not currently purge ChromaDB embeddings or LangGraph checkpoints. See [SECURITY.md](SECURITY.md).
+- The "Reset my data" flow deletes SQLite profile and session records, ChromaDB embeddings, and LangGraph checkpoints. See [SECURITY.md](SECURITY.md).
 - The web UI does not currently surface the CSV export endpoint.
 - The frontend ships without automated tests today.
 
 ## Architecture At A Glance
 
-```text
-Browser (Next.js 15, React 19)
-  -> typed fetch client in frontend/lib/api.ts
-FastAPI (api/main.py)
-  -> thin HTTP layer, validation, CORS, rate limiting
-Agent interface (src/processiq/agent/interface.py)
-  -> extraction, analysis, persistence orchestration
-LangGraph workflow (src/processiq/agent/)
-  -> check_context -> memory_synthesis -> initial_analysis
-  -> optional investigate <-> tools -> finalize
-Persistence
-  -> SQLite: profiles, analysis sessions, checkpoints
-  -> ChromaDB: semantic retrieval for past analyses
-```
+<img src="docs/assets/architecture_diagram.svg" alt="High-level ProcessIQ architecture showing the user and browser, Next.js web app, FastAPI and LangGraph orchestration layer, and storage systems" width="920" />
+
+<details>
+<summary>Agent workflow</summary>
+
+<img src="docs/assets/processiq_agent.svg" alt="ProcessIQ LangGraph workflow showing context checking, clarification, memory synthesis, analysis, investigation, tool calls, and finalization" width="920" />
+
+</details>
 
 Start with [docs/architecture.md](docs/architecture.md) for the system view, then drill into [docs/backend.md](docs/backend.md), [docs/frontend.md](docs/frontend.md), and [docs/ai-analysis-design.md](docs/ai-analysis-design.md).
 
@@ -90,7 +107,7 @@ Start with [docs/architecture.md](docs/architecture.md) for the system view, the
 ### Backend
 
 ```bash
-git clone https://github.com/SkybrushThriftwood/processIQ.git
+git clone https://github.com/thomas-lucke/processIQ.git
 cd processIQ
 uv sync --group dev
 cp .env.example .env
@@ -205,6 +222,10 @@ See [docs/deployment.md](docs/deployment.md) for environment variables, storage 
 - No authentication layer is present. User identity is a UUID stored in browser local storage.
 
 Read [SECURITY.md](SECURITY.md) before exposing this system beyond local or trusted internal use.
+
+## Development Approach
+
+This project was developed using AI-assisted workflows, primarily with Claude Code and Codex. I used these tools to accelerate implementation and documentation, while retaining responsibility for architecture, technical decisions, validation, and final review.
 
 ## Contributing
 

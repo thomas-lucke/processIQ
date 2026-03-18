@@ -8,7 +8,7 @@ It focuses on five areas:
 2. the extraction and analysis split
 3. the prompt and model-selection system
 4. the confidence, memory, and investigation mechanisms
-5. the current limitations that matter for reviewers
+5. the current limitations that matter in practice
 
 ## Design Principle
 
@@ -183,6 +183,8 @@ Profile completeness improves confidence, especially when prior improvements, re
 `ConfidenceResult.is_sufficient` compares the total score to `CONFIDENCE_THRESHOLD`, which defaults to `0.6`.
 
 ## LangGraph Workflow
+
+<img src="assets/processiq_agent.svg" alt="ProcessIQ LangGraph workflow showing context checking, clarification, memory synthesis, analysis, investigation, tool calls, and finalization" width="920" />
 
 The analysis graph does this:
 

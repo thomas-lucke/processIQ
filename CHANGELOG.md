@@ -18,11 +18,14 @@ All notable design decisions and changes to ProcessIQ are documented here.
 - `docs/architecture_diagram.mmd` is now a high-level system view focused on the product surface, API, analysis engine, storage, and outputs.
 - Added `docs/agent_flow.mmd` as a separate workflow diagram for the LangGraph analysis flow.
 - Simplified labels and structure so each diagram is easier to scan and more useful to human readers.
+- Refined the high-level architecture diagram further to emphasize the primary request path and reduce diagram clutter.
 
-### DOCS: Corrected architecture and behavior descriptions
+### DOCS: Added product media and architecture visuals to the README and docs
 
-- Updated documentation to reflect that the current backend delete/reset path removes profile data, saved sessions, embeddings, and checkpoints.
-- Kept visible caveats where they still matter, including the non-local extraction path behind Ollama selection and the in-memory cache dependency for graph/CSV lookup endpoints.
+- Added a short product demo GIF and four UI screenshots to `README.md`.
+- Embedded the exported high-level architecture SVG in `README.md` and `docs/architecture.md`.
+- Embedded the exported LangGraph workflow SVG in `README.md`, `docs/architecture.md`, and `docs/ai-analysis-design.md`.
+- Replaced the older text-only architecture snapshot in `README.md` with visual documentation.
 
 ## 2026-03-17
 

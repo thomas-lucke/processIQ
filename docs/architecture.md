@@ -10,6 +10,8 @@ This document explains the runtime shape of the system, how data moves through i
 
 ## System Overview
 
+<img src="assets/architecture_diagram.svg" alt="High-level ProcessIQ architecture showing the web app, API and LangGraph orchestration layer, and storage systems" width="920" />
+
 ```text
 Frontend (Next.js 15, React 19)
   - chat input
@@ -152,6 +154,8 @@ See [docs/backend.md](backend.md).
 
 ## LangGraph Workflow
 
+<img src="assets/processiq_agent.svg" alt="ProcessIQ LangGraph workflow showing context checking, clarification, memory synthesis, analysis, investigation, tool calls, and finalization" width="920" />
+
 The compiled workflow is defined in `src/processiq/agent/graph.py`.
 
 ### Node sequence
@@ -277,7 +281,7 @@ Later analysis for same user
 
 ## Current Design Constraints
 
-These are intentional or currently real, and reviewers should know them:
+These are intentional or currently real:
 
 - The current web UI does not use `POST /continue` or `GET /graph-schema/{thread_id}` even though the API exposes them.
 - `GraphSchema` is returned inline from `/analyze`; the graph endpoint is mostly useful for future clients or manual integrations.
@@ -292,7 +296,7 @@ FastAPI stays simple because analysis behavior changes more frequently than HTTP
 
 ### Hand-maintained DTO mirror
 
-The frontend uses hand-maintained TypeScript mirrors of Python schemas rather than generated clients. That increases maintenance burden slightly, but it keeps contracts explicit and readable in a portfolio-sized codebase.
+The frontend uses hand-maintained TypeScript mirrors of Python schemas rather than generated clients. That increases maintenance burden slightly, but it keeps contracts explicit and readable in a codebase of this size.
 
 ### Dual persistence strategy
 
@@ -306,7 +310,6 @@ The investigation loop is intentionally narrow today, but it provides a place to
 
 - Replace local-disk persistence with shared production storage.
 - Add authenticated user identity.
-- Complete full user-data deletion.
 - Add frontend test coverage.
 - Add issue-scoped investigation tools and streaming UX.
 

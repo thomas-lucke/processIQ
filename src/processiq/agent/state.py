@@ -48,7 +48,7 @@ class AgentState(TypedDict, total=False):
     # Error handling
     error: str | None
 
-    # LLM configuration (passed from UI)
+    # LLM configuration (passed from API layer)
     analysis_mode: str | None
     llm_provider: str | None
 

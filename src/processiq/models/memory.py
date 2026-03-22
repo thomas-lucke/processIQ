@@ -54,8 +54,7 @@ class RegulatoryEnvironment(StrEnum):
 class BusinessProfile(BaseModel):
     """Semantic memory: Facts about the business (Profile approach).
 
-    Phase 1: Populated from user input at session start.
-    Phase 2: Persisted and updated across sessions.
+    Populated from user input and persisted across sessions via SQLite.
     """
 
     industry: Industry | None = Field(

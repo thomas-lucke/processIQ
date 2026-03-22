@@ -24,9 +24,8 @@ import sys
 def setup_logging(level: str = "INFO") -> None:
     """Configure logging for the entire application.
 
-    Safe to call multiple times (Streamlit reruns the script on every
-    interaction). Checks for existing handlers rather than using a module-level
-    flag, since Streamlit reruns reset module state and cause handler accumulation.
+    Safe to call multiple times. Checks for existing handlers rather than using
+    a module-level flag to prevent handler accumulation on repeated calls.
 
     Args:
         level: Log level string (DEBUG, INFO, WARNING, ERROR).
@@ -44,7 +43,7 @@ def setup_logging(level: str = "INFO") -> None:
         )
         app_logger.addHandler(handler)
         # Prevent propagation to root logger (avoids duplicates from
-        # Streamlit's own root handler or basicConfig leftovers)
+        # root handler or basicConfig leftovers)
         app_logger.propagate = False
 
         # Quiet noisy third-party loggers

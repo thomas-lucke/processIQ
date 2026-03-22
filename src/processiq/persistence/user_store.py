@@ -1,7 +1,7 @@
 """User identification without login.
 
 Provides UUID-based user identification for conversation continuity.
-User IDs are stored in the browser's localStorage via Streamlit.
+User IDs are stored in the browser's localStorage via the Next.js frontend.
 
 Thread IDs combine user ID and conversation ID for unique identification:
     thread_id = f"{user_id}:{conversation_id}"
@@ -80,7 +80,7 @@ def get_user_id(session_state_getter: Callable[[], str | None]) -> str:
     """Get or create user ID from session state.
 
     This function should be called with a getter function that
-    retrieves the user_id from session state (Streamlit or similar).
+    retrieves the user_id from session state (e.g., from the frontend or API layer).
 
     Args:
         session_state_getter: Function that returns user_id or None.

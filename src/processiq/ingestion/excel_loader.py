@@ -240,7 +240,7 @@ def load_excel_from_bytes(
     process_name: str = "Imported Process",
     sheet_name: str | int = 0,
 ) -> ProcessData:
-    """Convenience function for loading Excel from bytes (e.g., Streamlit file upload).
+    """Convenience function for loading Excel from bytes (e.g., multipart file upload).
 
     Args:
         data: Raw Excel file bytes.

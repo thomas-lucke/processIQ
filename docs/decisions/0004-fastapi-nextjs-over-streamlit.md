@@ -36,4 +36,4 @@ The agent layer (`agent/`, `analysis/`, `models/`, `persistence/`) is untouched 
 
 ## Consequences
 
-The Streamlit UI (`src/processiq/ui/`) remains in the repo during development but will be deleted after the Next.js frontend is confirmed to cover all functionality (see Task 5). Any new UI features must be implemented in `frontend/` — nothing new goes into the Streamlit layer. The `frontend/lib/types.ts` file must be updated whenever Pydantic models in `src/processiq/models/` or `api/schemas.py` change.
+The Streamlit UI has been removed. All UI features are implemented in `frontend/`. The `frontend/lib/types.ts` file must be updated whenever Pydantic models in `src/processiq/models/` or `api/schemas.py` change.

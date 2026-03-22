@@ -411,7 +411,7 @@ def load_csv_from_bytes(
     process_name: str = "Imported Process",
     encoding: str = "utf-8",
 ) -> ProcessData:
-    """Convenience function for loading CSV from bytes (e.g., Streamlit file upload).
+    """Convenience function for loading CSV from bytes (e.g., multipart file upload).
 
     Args:
         data: Raw CSV bytes.

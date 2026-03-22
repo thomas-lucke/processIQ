@@ -88,7 +88,7 @@ def serialize_process_data(process_data: ProcessData) -> str:
 
 
 def filter_substantive_messages(messages: list[Any]) -> list[Any]:
-    """Filter UI messages to keep only substantive user messages.
+    """Filter messages to keep only substantive user messages.
 
     Filters out:
     - Non-user messages (agent, system)
@@ -97,7 +97,7 @@ def filter_substantive_messages(messages: list[Any]) -> list[Any]:
     - File upload notifications
 
     Args:
-        messages: List of ChatMessage objects from UI state.
+        messages: List of ChatMessage objects from conversation history.
 
     Returns:
         Filtered list of substantive user messages.
@@ -145,7 +145,7 @@ def build_conversation_context(
 
     Args:
         process_data: Current ProcessData being edited (optional).
-        ui_messages: List of ChatMessage objects from UI state.
+        ui_messages: List of ChatMessage objects from conversation history.
         max_messages: Maximum number of recent messages to include.
 
     Returns:

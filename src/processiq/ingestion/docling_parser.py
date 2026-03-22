@@ -283,7 +283,7 @@ def parse_file(file_path: Path | str) -> ParsedDocument:
 def parse_from_stream(stream: BinaryIO, filename: str) -> ParsedDocument:
     """Parse a document from a file-like object.
 
-    Useful for Streamlit file uploads which provide file-like objects.
+    Useful for multipart file uploads which provide file-like objects.
 
     Args:
         stream: File-like object with read() method.

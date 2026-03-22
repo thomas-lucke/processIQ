@@ -1,7 +1,7 @@
 """Clean interface for UI to interact with agent.
 
-This module decouples the Streamlit UI from LangGraph internals.
-The UI should import from this module, not from graph.py or state.py directly.
+This module decouples the Next.js/FastAPI layer from LangGraph internals.
+The API layer should import from this module, not from graph.py or state.py directly.
 
 Design principles:
 - AgentResponse is the single return type for all operations
@@ -67,10 +67,10 @@ ALL_SUPPORTED_EXTENSIONS: set[str] = {".csv", ".xlsx", ".xls"} | SUPPORTED_EXTEN
 
 @dataclass
 class AgentResponse:
-    """Response from agent to UI.
+    """Response from agent to the API layer.
 
     This is the single return type for all interface functions.
-    The UI should check which fields are populated to determine what to display.
+    The caller should check which fields are populated to determine what to return.
     """
 
     # Text response to show the user
